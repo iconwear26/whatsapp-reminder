@@ -1,0 +1,17 @@
+{
+  "name": "WhatsApp Reminder",
+  "short_name": "WAReminder",
+  "description": "Save reminders and get alerted on WhatsApp",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#075E54",
+  "theme_color": "#128C7E",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

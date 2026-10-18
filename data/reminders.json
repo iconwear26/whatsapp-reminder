@@ -1,0 +1,19 @@
+[
+  {
+    "id": "rem_daily_1792341878808_eman4",
+    "title": "Subah Dawa Leni Hai",
+    "message": "Subah Dawa Leni Hai",
+    "recipient": "9672247493",
+    "reminderTime": "2026-10-19T02:30:00.000Z",
+    "repeat": "daily",
+    "repeatTime": "08:00",
+    "endDate": "2026-10-31T18:29:59.999Z",
+    "priority": "high",
+    "category": "personal",
+    "status": "pending",
+    "sentCount": 0,
+    "createdAt": "2026-10-18T16:44:38.808Z",
+    "sentAt": null,
+    "error": null
+  }
+]
