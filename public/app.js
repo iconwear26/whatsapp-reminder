@@ -1,4 +1,4 @@
-// Reminder Me - Client Application Logic (Version 2.0)
+// Reminder Me - Luxury Edition (Version 3.0)
 
 // Localization Dictionaries (English Default & Hindi)
 const i18n = {
@@ -15,30 +15,30 @@ const i18n = {
     custom: 'Custom Reminder',
     daily: 'Daily Reminder',
     contact: 'Remind Someone',
-    whatToRemember: 'What do you want to remember?',
-    saveDefault: 'Save (15 Min Default)',
+    whatToRemember: 'What would you like to remember?',
+    saveDefault: 'Save Reminder',
     saveCustom: 'Save Custom Reminder',
     saveDaily: 'Save Daily Reminder',
     saveContact: 'Save Contact Reminder',
-    noReminders: 'No Reminders',
+    noReminders: 'No Active Reminders',
     noRemindersSub: 'Schedule your first reminder in seconds.',
     monthlyPlan: 'Monthly Autopay',
     yearlyPlan: 'Yearly Autopay',
-    haveCoupon: 'Have a Coupon Code?',
+    haveCoupon: 'HAVE A COUPON CODE?',
     apply: 'Apply',
     lockScreenNotif: 'Lock-Screen Notifications',
-    enablePush: '🔔 Enable Push Alerts',
+    enablePush: 'Enable Push Alerts',
     customerSupport: 'Customer Support',
-    shareApp: '📲 Share Reminder Me App',
-    logout: '🚪 Log Out',
-    deleteAccount: '🗑️ Delete My Account & Data',
+    shareApp: 'Share Reminder Me App',
+    logout: 'Log Out',
+    deleteAccount: 'Delete My Account & Data',
     switchLangBtn: 'हिन्दी'
   },
   hi: {
     appName: 'Reminder Me',
     trialText: '10 दिन का फ्री ट्रायल',
-    trialDaysLeft: '{days} दिन बचे हैं',
-    create: 'बनाएं (+)',
+    trialDaysLeft: '{days} दिन शेष',
+    create: 'बनाएं',
     reminders: 'रिमाइंडर',
     plans: 'प्लान्स',
     settings: 'सेटिंग्स',
@@ -46,9 +46,9 @@ const i18n = {
     quick: 'क्विक रिमाइंडर',
     custom: 'कस्टम रिमाइंडर',
     daily: 'रोजाना रिमाइंडर',
-    contact: 'कांटेक्ट को याद दिलाएं',
+    contact: 'कांटेक्ट रिमाइंडर',
     whatToRemember: 'आपको क्या याद रखना है?',
-    saveDefault: 'सेव करें (15 मिनट)',
+    saveDefault: 'रिमाइंडर सेव करें',
     saveCustom: 'कस्टम रिमाइंडर सेव करें',
     saveDaily: 'रोजाना रिमाइंडर सेव करें',
     saveContact: 'कांटेक्ट रिमाइंडर सेव करें',
@@ -59,11 +59,11 @@ const i18n = {
     haveCoupon: 'कूपन कोड है?',
     apply: 'अप्लाई करें',
     lockScreenNotif: 'लॉक-स्क्रीन नोटिफिकेशन',
-    enablePush: '🔔 पुश अलर्ट चालू करें',
+    enablePush: 'पुश अलर्ट चालू करें',
     customerSupport: 'कस्टमर सपोर्ट',
-    shareApp: '📲 रिमाइंडर मी ऐप शेयर करें',
-    logout: '🚪 लॉग आउट',
-    deleteAccount: '🗑️ मेरा अकाउंट और डेटा डिलीट करें',
+    shareApp: 'रिमाइंडर मी ऐप शेयर करें',
+    logout: 'लॉग आउट',
+    deleteAccount: 'मेरा अकाउंट और डेटा डिलीट करें',
     switchLangBtn: 'English'
   }
 };
@@ -73,8 +73,8 @@ let authToken = localStorage.getItem('reminder_me_token') || null;
 let currentUser = null;
 let selectedPlan = 'monthly';
 let currentReminders = [];
-let activeAlarmReminder = null;
-let alarmAudioInterval = null;
+let activeViewingReminder = null;
+let iosBannerTimeout = null;
 
 // DOM Elements
 const views = {
@@ -93,10 +93,33 @@ const trialBadge = document.getElementById('trial-badge');
 const trialText = document.getElementById('trial-text');
 const navAdminBtn = document.getElementById('nav-btn-admin');
 const navPlansBtn = document.getElementById('nav-btn-plans');
-const alarmModal = document.getElementById('alarm-modal');
+
+// iOS Banner & Aesthetic Modal Elements
+const iosBanner = document.getElementById('ios-notification-banner');
+const iosBannerTitle = document.getElementById('ios-banner-title');
+const iosBannerMessage = document.getElementById('ios-banner-message');
+const iosBannerTime = document.getElementById('ios-banner-time');
+
+const aestheticModal = document.getElementById('aesthetic-card-modal');
+const aestheticTitle = document.getElementById('aesthetic-task-title');
+const aestheticQuote = document.getElementById('aesthetic-quote-display');
+const aestheticTimeTag = document.getElementById('aesthetic-time-tag');
+
+// Motivational Serene Quotes
+const inspirationalQuotes = [
+  'Every moment is a fresh beginning. Take a deep breath and accomplish your task.',
+  'Aur yaqeenan aane wala waqt behtar hai guzre hue waqt se.',
+  'Small daily disciplines lead to massive long-term success.',
+  'Peace comes from within. Focus on what is in front of you right now.',
+  'Consistency is what transforms average into excellence.'
+];
+
+function getRandomQuote() {
+  return inspirationalQuotes[Math.floor(Math.random() * inspirationalQuotes.length)];
+}
 
 // -------------------------------------------------------------
-// TOAST NOTIFICATIONS & AUDIO ALARM
+// TOAST NOTIFICATIONS & AUDIO CHIME
 // -------------------------------------------------------------
 function showToast(msg, duration = 3000) {
   toastEl.textContent = msg;
@@ -104,114 +127,130 @@ function showToast(msg, duration = 3000) {
   setTimeout(() => toastEl.classList.remove('show'), duration);
 }
 
-// Built-in Web Audio Chime Alarm
-function playAlarmChime() {
+function playNotificationChime() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
 
-    function playTone(freq, time, duration = 0.25) {
+    function tone(freq, time, dur = 0.22) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, time);
-      gain.gain.setValueAtTime(0.4, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+      gain.gain.setValueAtTime(0.3, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(time);
-      osc.stop(time + duration);
+      osc.stop(time + dur);
     }
 
     const t = ctx.currentTime;
-    playTone(587.33, t, 0.2);        // D5
-    playTone(739.99, t + 0.15, 0.2); // F#5
-    playTone(880.00, t + 0.3, 0.3);  // A5
-    playTone(1174.66, t + 0.45, 0.5); // D6
-  } catch (e) {
-    console.log('Audio chime error:', e);
-  }
-}
-
-function startContinuousAlarm() {
-  stopContinuousAlarm();
-  playAlarmChime();
-  alarmAudioInterval = setInterval(playAlarmChime, 3000);
-}
-
-function stopContinuousAlarm() {
-  if (alarmAudioInterval) {
-    clearInterval(alarmAudioInterval);
-    alarmAudioInterval = null;
-  }
+    tone(659.25, t, 0.18);       // E5
+    tone(880.00, t + 0.12, 0.22); // A5
+    tone(1318.51, t + 0.26, 0.4); // E6
+  } catch (e) {}
 }
 
 // -------------------------------------------------------------
-// IN-APP NOTIFICATION ALARM POPUP
+// 📱 iOS STYLE TOP NOTIFICATION SLIDE-DOWN BANNER (Image 2)
 // -------------------------------------------------------------
-function triggerAlarmModal(reminder) {
-  activeAlarmReminder = reminder;
-  const dueTime = new Date(reminder.reminderTime).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit'
-  });
+function showIosNotificationBanner(reminder) {
+  activeViewingReminder = reminder;
+  playNotificationChime();
 
-  document.getElementById('alarm-time-display').textContent = dueTime;
-  document.getElementById('alarm-title-display').textContent = reminder.title || 'Reminder Alert';
-  document.getElementById('alarm-message-display').textContent = reminder.message || reminder.title || '';
-  
-  alarmModal.classList.remove('hidden');
-  startContinuousAlarm();
+  iosBannerTitle.textContent = reminder.title || 'Reminder Alert';
+  iosBannerMessage.textContent = reminder.message || reminder.title || 'Scheduled task is due';
+  iosBannerTime.textContent = 'Now';
 
-  // Try device vibration if available
+  iosBanner.classList.remove('hidden');
+  iosBanner.classList.remove('hiding');
+
   if ('vibrate' in navigator) {
-    try { navigator.vibrate([400, 200, 400, 200, 600]); } catch (e) {}
+    try { navigator.vibrate([250, 100, 250]); } catch (e) {}
+  }
+
+  if (iosBannerTimeout) clearTimeout(iosBannerTimeout);
+  iosBannerTimeout = setTimeout(() => {
+    dismissIosBanner();
+  }, 10000); // Stays visible for 10s or until tapped
+}
+
+function dismissIosBanner() {
+  if (iosBanner.classList.contains('hidden')) return;
+  iosBanner.classList.add('hiding');
+  setTimeout(() => {
+    iosBanner.classList.add('hidden');
+    iosBanner.classList.remove('hiding');
+  }, 300);
+
+  if (activeViewingReminder) {
+    fetch(`/api/reminders/${activeViewingReminder.id}/dismiss`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    }).catch(() => {});
   }
 }
 
-async function dismissCurrentAlarm() {
-  stopContinuousAlarm();
-  alarmModal.classList.add('hidden');
-  if (!activeAlarmReminder) return;
+function openAestheticCardFromBanner() {
+  if (iosBannerTimeout) clearTimeout(iosBannerTimeout);
+  iosBanner.classList.add('hidden');
+  if (activeViewingReminder) {
+    openAestheticModal(activeViewingReminder);
+  }
+}
+
+// -------------------------------------------------------------
+// 🌸 AESTHETIC ENERGY READING CARD (Image 3)
+// -------------------------------------------------------------
+function openAestheticModal(reminder) {
+  activeViewingReminder = reminder;
+  aestheticTitle.textContent = reminder.title || 'Task Reminder';
+  
+  if (reminder.message && reminder.message !== reminder.title) {
+    aestheticQuote.textContent = `"${reminder.message}"`;
+  } else {
+    aestheticQuote.textContent = `"${getRandomQuote()}"`;
+  }
+
+  const d = new Date(reminder.reminderTimestamp || reminder.reminderTime);
+  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  aestheticTimeTag.textContent = `${dateStr} • ${timeStr}`;
+
+  aestheticModal.classList.remove('hidden');
+}
+
+function closeAestheticModal() {
+  aestheticModal.classList.add('hidden');
+  activeViewingReminder = null;
+}
+
+async function markAestheticDone() {
+  if (!activeViewingReminder) {
+    closeAestheticModal();
+    return;
+  }
+  const id = activeViewingReminder.id;
+  closeAestheticModal();
 
   try {
-    await fetch(`/api/reminders/${activeAlarmReminder.id}/dismiss`, {
+    const res = await fetch(`/api/reminders/${id}/dismiss`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${authToken}` }
     });
-    showToast('✓ Reminder marked complete');
-    loadReminders();
+    if (res.ok) {
+      showToast('✓ Marked as completed');
+      loadReminders();
+    }
   } catch (e) {
-    console.error('Dismiss error:', e);
+    console.error('Error marking done:', e);
   }
-  activeAlarmReminder = null;
 }
 
-async function snoozeCurrentAlarm(minutes = 5) {
-  stopContinuousAlarm();
-  alarmModal.classList.add('hidden');
-  if (!activeAlarmReminder) return;
-
-  try {
-    const res = await fetch(`/api/reminders/${activeAlarmReminder.id}/snooze`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ minutes })
-    });
-    const data = await res.json();
-    showToast(`💤 Snoozed for ${minutes} minutes`);
-    loadReminders();
-  } catch (e) {
-    console.error('Snooze error:', e);
-  }
-  activeAlarmReminder = null;
-}
-
-// Background poller for due in-app reminders
-const notifiedIds = new Set();
+// In-App Background Poller for Due Reminders
+const handledReminderIds = new Set();
 async function pollDueReminders() {
   if (!authToken || !currentUser) return;
   try {
@@ -222,16 +261,16 @@ async function pollDueReminders() {
     const data = await res.json();
     if (data.due && data.due.length > 0) {
       for (const rem of data.due) {
-        if (!notifiedIds.has(rem.id)) {
-          notifiedIds.add(rem.id);
-          triggerAlarmModal(rem);
-          break; // Show one modal at a time
+        if (!handledReminderIds.has(rem.id)) {
+          handledReminderIds.add(rem.id);
+          showIosNotificationBanner(rem);
+          break;
         }
       }
     }
   } catch (e) {}
 }
-setInterval(pollDueReminders, 6000);
+setInterval(pollDueReminders, 5000);
 
 // -------------------------------------------------------------
 // LANGUAGE LOCALIZATION SYSTEM
@@ -243,7 +282,6 @@ function applyLanguage(lang) {
 
   langLabel.textContent = t.switchLangBtn;
 
-  // Nav labels
   document.getElementById('nav-lbl-create').textContent = t.create;
   document.getElementById('nav-lbl-list').textContent = t.reminders;
   document.getElementById('nav-lbl-plans').textContent = t.plans;
@@ -251,7 +289,6 @@ function applyLanguage(lang) {
   const adminLbl = document.getElementById('nav-lbl-admin');
   if (adminLbl) adminLbl.textContent = t.admin;
 
-  // Create headings & buttons
   document.getElementById('lbl-quick-heading').textContent = t.quick;
   document.getElementById('lbl-custom-heading').textContent = t.custom;
   document.getElementById('lbl-daily-heading').textContent = t.daily;
@@ -262,17 +299,14 @@ function applyLanguage(lang) {
   document.getElementById('btn-daily-save').textContent = t.saveDaily;
   document.getElementById('btn-contact-save').textContent = t.saveContact;
 
-  // List empty state
   document.getElementById('lbl-list-title').textContent = t.reminders;
   document.getElementById('lbl-empty-title').textContent = t.noReminders;
   document.getElementById('lbl-empty-sub').textContent = t.noRemindersSub;
 
-  // Plans
   document.getElementById('lbl-sub-title').textContent = t.plans;
   document.getElementById('lbl-plan-monthly').textContent = t.monthlyPlan;
   document.getElementById('lbl-plan-yearly').textContent = t.yearlyPlan;
 
-  // Settings
   document.getElementById('lbl-settings-title').textContent = t.settings;
   document.getElementById('lbl-notif-perm').textContent = t.lockScreenNotif;
   document.getElementById('btn-enable-push').textContent = t.enablePush;
@@ -288,22 +322,19 @@ langToggleBtn.addEventListener('click', () => {
 });
 
 // -------------------------------------------------------------
-// NAVIGATION SYSTEM (Customized for Owner vs Normal User)
+// NAVIGATION SYSTEM
 // -------------------------------------------------------------
 function switchNav(targetView) {
-  // If user is Owner and clicks on 'subscription' view, redirect to create or admin
   if (currentUser && currentUser.isOwner && targetView === 'subscription') {
     targetView = 'admin';
   }
 
-  // Update view visibility
   Object.keys(views).forEach(v => {
     if (views[v]) {
       views[v].classList.toggle('active', v === targetView);
     }
   });
 
-  // Update bottom nav icons
   document.querySelectorAll('.bottom-nav .nav-pill-btn').forEach(btn => {
     const nav = btn.getAttribute('data-nav');
     btn.classList.toggle('active', nav === targetView);
@@ -317,7 +348,7 @@ function switchNav(targetView) {
 }
 
 // -------------------------------------------------------------
-// CREATE REMINDER MODES
+// CREATE REMINDER MODES (ACCURATE LOCAL TIME)
 // -------------------------------------------------------------
 function switchCreateMode(mode) {
   const modes = ['quick', 'custom', 'daily', 'contact'];
@@ -332,7 +363,26 @@ function switchCreateMode(mode) {
 // Mode 1: Quick Tap Save
 async function quickSave(minutes, preset) {
   const inputEl = document.getElementById('quick-input');
-  const message = inputEl.value.trim() || 'Quick Task';
+  const message = inputEl.value.trim() || 'Reminder Task';
+
+  let targetDate = new Date();
+  if (typeof minutes === 'number') {
+    targetDate = new Date(Date.now() + minutes * 60000);
+  } else if (preset === 'tonight-9pm') {
+    if (targetDate.getHours() >= 21) targetDate.setDate(targetDate.getDate() + 1);
+    targetDate.setHours(21, 0, 0, 0);
+  } else if (preset === 'tomorrow-8am') {
+    targetDate.setDate(targetDate.getDate() + 1);
+    targetDate.setHours(8, 0, 0, 0);
+  } else if (preset === 'tomorrow-6pm') {
+    targetDate.setDate(targetDate.getDate() + 1);
+    targetDate.setHours(18, 0, 0, 0);
+  } else {
+    targetDate = new Date(Date.now() + 15 * 60000);
+  }
+
+  const reminderTimestamp = targetDate.getTime();
+  const reminderTime = targetDate.toISOString();
 
   try {
     const res = await fetch('/api/reminders/quick', {
@@ -341,21 +391,22 @@ async function quickSave(minutes, preset) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
-      body: JSON.stringify({ message, minutes, preset })
+      body: JSON.stringify({ message, reminderTimestamp, reminderTime })
     });
     const data = await res.json();
     if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to save reminder'));
+      showToast(data.error || 'Failed to save');
       return;
     }
 
-    playAlarmChime();
-    showToast(`✓ Scheduled for ${data.scheduledTime}!`);
+    playNotificationChime();
+    const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    showToast(`✓ Scheduled for ${timeFormatted}`);
     inputEl.value = '';
     loadReminders();
     switchNav('list');
   } catch (err) {
-    showToast('❌ Error: ' + err.message);
+    showToast('Error: ' + err.message);
   }
 }
 
@@ -371,7 +422,11 @@ document.getElementById('form-custom').addEventListener('submit', async (e) => {
     showToast('Please select Date & Time');
     return;
   }
-  const [date, time] = datetimeVal.split('T');
+
+  // Parse in local browser timezone accurately!
+  const targetDate = new Date(datetimeVal);
+  const reminderTimestamp = targetDate.getTime();
+  const reminderTime = targetDate.toISOString();
 
   try {
     const res = await fetch('/api/reminders/custom', {
@@ -380,21 +435,22 @@ document.getElementById('form-custom').addEventListener('submit', async (e) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
-      body: JSON.stringify({ title, note, date, time, priority })
+      body: JSON.stringify({ title, note, reminderTimestamp, reminderTime, priority })
     });
     const data = await res.json();
     if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to save'));
+      showToast(data.error || 'Failed to save');
       return;
     }
 
-    playAlarmChime();
-    showToast('✓ Custom reminder saved!');
+    playNotificationChime();
+    const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    showToast(`✓ Saved for ${timeFormatted}`);
     document.getElementById('form-custom').reset();
     loadReminders();
     switchNav('list');
   } catch (err) {
-    showToast('❌ ' + err.message);
+    showToast('Error: ' + err.message);
   }
 });
 
@@ -405,6 +461,16 @@ document.getElementById('form-daily').addEventListener('submit', async (e) => {
   const time = document.getElementById('daily-time').value;
   const kisDateTak = document.getElementById('daily-enddate').value;
 
+  const [hours, minutes] = time.split(':');
+  const targetDate = new Date();
+  targetDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+  if (targetDate < new Date()) {
+    targetDate.setDate(targetDate.getDate() + 1);
+  }
+
+  const reminderTimestamp = targetDate.getTime();
+  const reminderTime = targetDate.toISOString();
+
   try {
     const res = await fetch('/api/reminders/daily', {
       method: 'POST',
@@ -412,21 +478,21 @@ document.getElementById('form-daily').addEventListener('submit', async (e) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
-      body: JSON.stringify({ title, time, kisDateTak })
+      body: JSON.stringify({ title, time, kisDateTak, reminderTimestamp, reminderTime })
     });
     const data = await res.json();
     if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to save'));
+      showToast(data.error || 'Failed to save');
       return;
     }
 
-    playAlarmChime();
-    showToast('✓ Daily recurring reminder scheduled!');
+    playNotificationChime();
+    showToast(`✓ Daily reminder scheduled at ${time}`);
     document.getElementById('form-daily').reset();
     loadReminders();
     switchNav('list');
   } catch (err) {
-    showToast('❌ ' + err.message);
+    showToast('Error: ' + err.message);
   }
 });
 
@@ -438,11 +504,9 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
   const title = document.getElementById('contact-title').value.trim();
   const datetimeVal = document.getElementById('contact-datetime').value;
 
-  let date = null;
-  let time = null;
-  if (datetimeVal) {
-    [date, time] = datetimeVal.split('T');
-  }
+  let targetDate = datetimeVal ? new Date(datetimeVal) : new Date(Date.now() + 15 * 60000);
+  const reminderTimestamp = targetDate.getTime();
+  const reminderTime = targetDate.toISOString();
 
   try {
     const res = await fetch('/api/reminders/contact', {
@@ -451,26 +515,26 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
-      body: JSON.stringify({ contactName, phone, title, date, time })
+      body: JSON.stringify({ contactName, phone, title, reminderTimestamp, reminderTime })
     });
     const data = await res.json();
     if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to save'));
+      showToast(data.error || 'Failed to save');
       return;
     }
 
-    playAlarmChime();
-    showToast(`✓ Reminder scheduled for ${contactName}!`);
+    playNotificationChime();
+    showToast(`✓ Reminder set for ${contactName}`);
     document.getElementById('form-contact').reset();
     loadReminders();
     switchNav('list');
   } catch (err) {
-    showToast('❌ ' + err.message);
+    showToast('Error: ' + err.message);
   }
 });
 
 // -------------------------------------------------------------
-// REMINDERS LIST
+// REMINDERS LIST (ACCURATE LOCAL TIME DISPLAY)
 // -------------------------------------------------------------
 async function loadReminders() {
   if (!authToken) return;
@@ -500,21 +564,21 @@ function renderReminders() {
 
   emptyState.classList.add('hidden');
   container.innerHTML = currentReminders.map(r => {
-    const d = new Date(r.reminderTime);
-    const timeFormatted = d.toLocaleString(currentLang === 'hi' ? 'hi-IN' : 'en-US', {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
+    // Format in exact local device time!
+    const d = new Date(r.reminderTimestamp || r.reminderTime);
+    const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 
     const isDaily = r.repeat === 'daily';
-    const contactBadge = r.targetContactName ? `<span class="pill-tag" style="background:rgba(249,115,22,0.12); color:#F97316;">For: ${escapeHtml(r.targetContactName)}</span>` : '';
-    const dailyBadge = isDaily ? `<span class="pill-tag" style="background:rgba(139,92,246,0.12); color:#7C3AED;">🔁 Daily (${r.repeatTime})</span>` : '';
+    const contactBadge = r.targetContactName ? `<span class="pill-tag">For: ${escapeHtml(r.targetContactName)}</span>` : '';
+    const dailyBadge = isDaily ? `<span class="pill-tag">Daily (${r.repeatTime})</span>` : '';
 
     return `
-      <div class="reminder-item">
+      <div class="reminder-item" onclick="openAestheticModalById('${r.id}')">
         <div class="reminder-header-row">
           <div>
             <div class="reminder-text">${escapeHtml(r.title)}</div>
-            ${r.message && r.message !== r.title ? `<p style="font-size:12px; color:var(--text-muted); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
+            ${r.message && r.message !== r.title ? `<p style="font-size:13px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
           </div>
           <div style="display:flex; gap:4px;">
             ${dailyBadge}
@@ -523,10 +587,10 @@ function renderReminders() {
         </div>
 
         <div class="reminder-meta-row">
-          <div class="reminder-time-chip">⏰ ${timeFormatted}</div>
-          <div class="reminder-actions-btns">
-            <button class="mini-btn mini-send" onclick="testPlayReminder('${r.id}')" title="Test Alarm">🔔 Ring</button>
-            <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')" title="Delete">🗑️</button>
+          <div class="reminder-time-chip">${dateFormatted}, ${timeFormatted}</div>
+          <div class="reminder-actions-btns" onclick="event.stopPropagation()">
+            <button class="mini-btn mini-send" onclick="testPlayReminder('${r.id}')">View</button>
+            <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')">Delete</button>
           </div>
         </div>
       </div>
@@ -534,13 +598,17 @@ function renderReminders() {
   }).join('');
 }
 
+function openAestheticModalById(id) {
+  const rem = currentReminders.find(r => r.id === id);
+  if (rem) {
+    openAestheticModal(rem);
+  }
+}
+
 function testPlayReminder(id) {
   const rem = currentReminders.find(r => r.id === id);
   if (rem) {
-    triggerAlarmModal(rem);
-  } else {
-    playAlarmChime();
-    showToast('🔔 Alarm tested!');
+    openAestheticModal(rem);
   }
 }
 
@@ -603,20 +671,19 @@ document.getElementById('auth-form').addEventListener('submit', async (e) => {
     const data = await res.json();
 
     if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Authentication failed'));
+      showToast(data.error || 'Authentication failed');
       return;
     }
 
-    // Never Logout: 365-day persistent token in localStorage
     authToken = data.token;
     localStorage.setItem('reminder_me_token', authToken);
     currentUser = data.user;
 
-    showToast('🎉 Welcome to Reminder Me!');
+    showToast('Welcome to Reminder Me!');
     initAppSession();
     switchNav('create');
   } catch (err) {
-    showToast('❌ Network error: ' + err.message);
+    showToast('Network error: ' + err.message);
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = authMode === 'signup' ? 'Start 10-Day Free Trial' : 'Log In';
@@ -652,7 +719,6 @@ function initAppSession() {
 
   const isOwner = currentUser && currentUser.isOwner;
 
-  // 1. Owner Navigation Control: Hide Plans tab completely for Owner
   if (isOwner) {
     if (navPlansBtn) navPlansBtn.classList.add('hidden');
     if (navAdminBtn) navAdminBtn.classList.remove('hidden');
@@ -666,7 +732,6 @@ function initAppSession() {
     document.getElementById('box-owner-plan-vip').classList.add('hidden');
     document.getElementById('box-regular-plans').classList.remove('hidden');
 
-    // If user has applied lifetime/active coupon, don't show annoying payment cards
     const isSubscribed = currentUser && (currentUser.planStatus === 'coupon_lifetime' || currentUser.planStatus === 'monthly' || currentUser.planStatus === 'yearly');
     const userActiveBox = document.getElementById('box-user-active-vip');
     if (isSubscribed) {
@@ -690,21 +755,21 @@ function updateUserBadge() {
 
   if (currentUser.isOwner) {
     trialText.textContent = '👑 Owner VIP';
-    trialBadge.style.background = 'rgba(15, 81, 50, 0.15)';
-    trialBadge.style.color = '#0F5132';
+    trialBadge.style.background = 'var(--emerald-light)';
+    trialBadge.style.color = 'var(--emerald-primary)';
   } else if (currentUser.planStatus === 'coupon_lifetime') {
-    trialText.textContent = '✨ Lifetime VIP';
-    trialBadge.style.background = 'rgba(15, 81, 50, 0.15)';
-    trialBadge.style.color = '#0F5132';
+    trialText.textContent = 'Lifetime VIP';
+    trialBadge.style.background = 'var(--emerald-light)';
+    trialBadge.style.color = 'var(--emerald-primary)';
   } else if (currentUser.planStatus === 'trial') {
     const days = currentUser.trialDaysRemaining || 10;
     trialText.textContent = t.trialDaysLeft.replace('{days}', days);
-    trialBadge.style.background = 'rgba(234, 88, 12, 0.12)';
+    trialBadge.style.background = 'rgba(234, 88, 12, 0.1)';
     trialBadge.style.color = '#C2410C';
   } else {
-    trialText.textContent = '✓ Pro Member';
-    trialBadge.style.background = 'rgba(15, 81, 50, 0.15)';
-    trialBadge.style.color = '#0F5132';
+    trialText.textContent = 'Pro Member';
+    trialBadge.style.background = 'var(--emerald-light)';
+    trialBadge.style.color = 'var(--emerald-primary)';
   }
 }
 
@@ -718,7 +783,7 @@ function logoutUser() {
 }
 
 async function deleteUserAccount() {
-  if (!confirm('⚠️ Permanently delete your account and all reminders? This cannot be undone.')) return;
+  if (!confirm('Permanently delete your account and all reminders? This cannot be undone.')) return;
   try {
     const res = await fetch('/api/auth/delete-account', {
       method: 'DELETE',
@@ -737,12 +802,12 @@ async function deleteUserAccount() {
 }
 
 // -------------------------------------------------------------
-// SUBSCRIPTIONS & COUPONS (For Normal Users)
+// SUBSCRIPTIONS & COUPONS
 // -------------------------------------------------------------
 function selectPlan(plan) {
   selectedPlan = plan;
-  document.getElementById('card-plan-monthly').classList.toggle('selected', plan === 'monthly');
-  document.getElementById('card-plan-yearly').classList.toggle('selected', plan === 'yearly');
+  document.getElementById('card-plan-monthly').style.borderColor = plan === 'monthly' ? 'var(--emerald-primary)' : 'var(--border-subtle)';
+  document.getElementById('card-plan-yearly').style.borderColor = plan === 'yearly' ? 'var(--emerald-primary)' : 'var(--border-subtle)';
 }
 
 async function startRazorpayAutopay() {
@@ -759,7 +824,7 @@ async function startRazorpayAutopay() {
     const data = await res.json();
 
     if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to start payment'));
+      showToast(data.error || 'Failed to start payment');
       return;
     }
 
@@ -786,8 +851,8 @@ async function startRazorpayAutopay() {
         });
         const verifyData = await verifyRes.json();
         if (verifyRes.ok) {
-          playAlarmChime();
-          showToast('🎉 ' + verifyData.message);
+          playNotificationChime();
+          showToast(verifyData.message);
           checkSession();
         }
       },
@@ -796,14 +861,13 @@ async function startRazorpayAutopay() {
         email: currentUser.email,
         contact: currentUser.phone
       },
-      theme: { color: '#0F5132' }
+      theme: { color: '#0F3826' }
     };
 
     if (typeof Razorpay !== 'undefined') {
       const rzp = new Razorpay(options);
       rzp.open();
     } else {
-      // Simulation fallback for sandbox
       const mockPayId = 'pay_' + Date.now();
       await fetch('/api/subscription/verify-autopay', {
         method: 'POST',
@@ -813,11 +877,11 @@ async function startRazorpayAutopay() {
         },
         body: JSON.stringify({ planType: selectedPlan, paymentId: mockPayId })
       });
-      showToast('✓ Autopay subscription activated (Test Mode)');
+      showToast('Autopay activated (Test Mode)');
       checkSession();
     }
   } catch (err) {
-    showToast('❌ ' + err.message);
+    showToast(err.message);
   }
 }
 
@@ -839,12 +903,12 @@ async function applyCouponCode() {
     });
     const data = await res.json();
     if (res.ok) {
-      playAlarmChime();
-      showToast('🎉 ' + data.message);
+      playNotificationChime();
+      showToast(data.message);
       document.getElementById('coupon-input').value = '';
       checkSession();
     } else {
-      showToast('❌ ' + (data.error || 'Invalid coupon'));
+      showToast(data.error || 'Invalid coupon');
     }
   } catch (e) {
     showToast('Coupon application error');
@@ -885,8 +949,8 @@ async function enablePushNotifications() {
       body: JSON.stringify({ subscription: sub })
     });
 
-    playAlarmChime();
-    showToast('🔔 Lock-screen notifications enabled!');
+    playNotificationChime();
+    showToast('✓ Lock-screen notifications enabled!');
   } catch (err) {
     showToast('Push setup error: ' + err.message);
   }
@@ -978,12 +1042,12 @@ function exportAdminDataCSV() {
 }
 
 // -------------------------------------------------------------
-// SHARE APP & VOICE MIC HELPER
+// SHARE APP & VOICE MIC
 // -------------------------------------------------------------
 function shareReminderMeApp() {
   const shareData = {
     title: 'Reminder Me',
-    text: 'Try Reminder Me - Smart task, medicine & daily reminders with loud in-app alarms and push alerts!',
+    text: 'Try Reminder Me - Elegant in-app alarms and push alerts for all your daily tasks!',
     url: window.location.origin
   };
 
@@ -991,14 +1055,14 @@ function shareReminderMeApp() {
     navigator.share(shareData).catch(() => {});
   } else {
     navigator.clipboard.writeText(window.location.origin).then(() => {
-      showToast('📋 App link copied to clipboard!');
+      showToast('App link copied to clipboard');
     });
   }
 }
 
 document.getElementById('share-app-btn').addEventListener('click', shareReminderMeApp);
 
-// Voice Mic recognition setup
+// Voice Mic recognition
 const quickMic = document.getElementById('quick-mic-btn');
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 if (SpeechRecognition && quickMic) {
@@ -1007,8 +1071,8 @@ if (SpeechRecognition && quickMic) {
 
   quickMic.addEventListener('click', () => {
     try {
-      showToast('🎙️ Listening...');
-      quickMic.textContent = '🔴';
+      showToast('Listening...');
+      quickMic.textContent = '●';
       recognition.start();
     } catch (e) {
       recognition.stop();
@@ -1035,9 +1099,9 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Default DateTime for custom inputs
+// Default DateTime for custom inputs in local time
 const now = new Date();
-now.setMinutes(now.getMinutes() + 30);
+now.setMinutes(now.getMinutes() + 15);
 const pad = n => n < 10 ? '0' + n : n;
 const defaultDT = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 const customDT = document.getElementById('custom-datetime');
@@ -1045,6 +1109,6 @@ if (customDT) customDT.value = defaultDT;
 const contactDT = document.getElementById('contact-datetime');
 if (contactDT) contactDT.value = defaultDT;
 
-// Start session
+// Initialize Session
 applyLanguage(currentLang);
 checkSession();

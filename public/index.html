@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#F4EFEA">
+  <meta name="theme-color" content="#FFFFFF">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>Reminder Me - Smart In-App & Push Notification Reminders</title>
+  <title>Reminder Me</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,9 +14,29 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <!-- Ambient Soft Background Gradients -->
-  <div class="ambient-blob-1"></div>
-  <div class="ambient-blob-2"></div>
+
+  <!-- iOS Style Top Notification Slide-Down Banner (Matches Image 2) -->
+  <div id="ios-notification-banner" class="ios-banner hidden" onclick="openAestheticCardFromBanner()">
+    <div class="ios-banner-header">
+      <div class="ios-banner-brand">
+        <div class="ios-app-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+        </div>
+        <span class="ios-app-label">REMINDERS</span>
+      </div>
+      <span class="ios-time-label" id="ios-banner-time">Now</span>
+    </div>
+    <div class="ios-banner-body">
+      <h4 id="ios-banner-title">Reminder Alert</h4>
+      <p id="ios-banner-message">Tap to view your reminder</p>
+    </div>
+    <div class="ios-banner-action" onclick="event.stopPropagation(); dismissIosBanner();">
+      <button type="button" class="ios-banner-close-btn">Done ✓</button>
+    </div>
+  </div>
 
   <div class="app-container">
 
@@ -79,43 +99,43 @@
           <form id="auth-form">
             <!-- Full Name (Signup only) -->
             <div class="form-group" id="group-fullname">
-              <label id="lbl-fullname">Full Name</label>
+              <label id="lbl-fullname" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Full Name</label>
               <input type="text" id="auth-fullname" class="input-glass" placeholder="Your Name">
             </div>
 
             <!-- Mobile Phone (Signup only) -->
-            <div class="form-group" id="group-phone">
-              <label id="lbl-phone">Mobile Number</label>
+            <div class="form-group mt-2" id="group-phone">
+              <label id="lbl-phone" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Mobile Number</label>
               <input type="tel" id="auth-phone" class="input-glass" placeholder="+91 98765 43210">
             </div>
 
             <!-- Email -->
-            <div class="form-group">
-              <label id="lbl-email">Email Address</label>
+            <div class="form-group mt-2">
+              <label id="lbl-email" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Email Address</label>
               <input type="email" id="auth-email" class="input-glass" placeholder="you@example.com" required>
             </div>
 
             <!-- Password -->
-            <div class="form-group">
-              <label id="lbl-password">App Password</label>
+            <div class="form-group mt-2">
+              <label id="lbl-password" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">App Password</label>
               <input type="password" id="auth-password" class="input-glass" placeholder="••••••••" required>
             </div>
 
-            <!-- DPDP Compliance Agreement (Signup only) -->
-            <div class="form-group" id="group-terms">
-              <label style="display:flex; align-items:flex-start; gap:8px; font-size:11px; text-transform:none; font-weight:500;">
+            <!-- Agreement Checkbox -->
+            <div class="form-group mt-3" id="group-terms">
+              <label style="display:flex; align-items:flex-start; gap:8px; font-size:12px; color:var(--text-secondary); line-height:1.4;">
                 <input type="checkbox" id="auth-terms" checked required style="margin-top:2px;">
-                <span id="terms-text">I agree to the Privacy Policy, Terms of Service & 10-Day Free Trial Policy.</span>
+                <span id="terms-text">I agree to the Terms of Service & 10-Day Free Trial Policy.</span>
               </label>
             </div>
 
-            <button type="submit" class="btn-pill btn-forest mt-2" id="auth-submit-btn">
+            <button type="submit" class="btn-pill btn-forest mt-3" id="auth-submit-btn">
               Start 10-Day Free Trial
             </button>
           </form>
 
-          <p class="mt-3 text-center" style="font-size:12px; color:var(--text-muted);">
-            Official Support: <a href="mailto:supportrememberme@gmail.com" style="color:var(--forest-green); font-weight:600;">supportrememberme@gmail.com</a>
+          <p class="mt-3 text-center" style="font-size:12px; color:var(--text-tertiary);">
+            Support: <a href="mailto:supportrememberme@gmail.com" style="color:var(--emerald-primary); font-weight:600;">supportrememberme@gmail.com</a>
           </p>
         </div>
       </section>
@@ -125,15 +145,15 @@
       <!-- ============================================== -->
       <section id="view-create" class="view active">
         
-        <!-- 4-Mode Segmented Selector -->
+        <!-- Segmented Mode Bar -->
         <div class="mode-segmented-bar">
-          <button type="button" class="mode-tab-btn active" id="tab-quick" onclick="switchCreateMode('quick')">⚡ Quick</button>
-          <button type="button" class="mode-tab-btn" id="tab-custom" onclick="switchCreateMode('custom')">🛠️ Custom</button>
-          <button type="button" class="mode-tab-btn" id="tab-daily" onclick="switchCreateMode('daily')">🔁 Daily</button>
-          <button type="button" class="mode-tab-btn" id="tab-contact" onclick="switchCreateMode('contact')">👥 Someone</button>
+          <button type="button" class="mode-tab-btn active" id="tab-quick" onclick="switchCreateMode('quick')">Quick</button>
+          <button type="button" class="mode-tab-btn" id="tab-custom" onclick="switchCreateMode('custom')">Custom</button>
+          <button type="button" class="mode-tab-btn" id="tab-daily" onclick="switchCreateMode('daily')">Daily</button>
+          <button type="button" class="mode-tab-btn" id="tab-contact" onclick="switchCreateMode('contact')">Someone</button>
         </div>
 
-        <!-- 1. Quick Tap Mode -->
+        <!-- 1. Quick Mode -->
         <div id="box-mode-quick" class="card-glass">
           <div class="card-title-row">
             <h2 id="lbl-quick-heading">Quick Reminder</h2>
@@ -141,7 +161,7 @@
           </div>
 
           <div class="input-with-btn">
-            <textarea id="quick-input" class="input-glass textarea-glass" rows="3" placeholder="What do you want to remember?" autofocus></textarea>
+            <textarea id="quick-input" class="input-glass textarea-glass" rows="3" placeholder="What would you like to remember?" autofocus></textarea>
             <button type="button" id="quick-mic-btn" class="floating-mic" title="Voice Input">🎙️</button>
           </div>
 
@@ -157,8 +177,8 @@
             <button type="button" class="time-pill-btn" onclick="quickSave(null, 'tomorrow-6pm')">Tomorrow 6 PM</button>
           </div>
 
-          <button type="button" class="btn-pill btn-forest mt-3" id="btn-quick-save-default" onclick="quickSave(15)">
-            Save (15 Min Default)
+          <button type="button" class="btn-pill btn-forest" id="btn-quick-save-default" onclick="quickSave(15)">
+            Save Reminder
           </button>
         </div>
 
@@ -166,29 +186,29 @@
         <div id="box-mode-custom" class="card-glass hidden">
           <div class="card-title-row">
             <h2 id="lbl-custom-heading">Custom Reminder</h2>
-            <span class="pill-tag">Exact Time</span>
+            <span class="pill-tag">Exact Date & Time</span>
           </div>
 
           <form id="form-custom">
             <div class="form-group">
-              <label id="lbl-custom-title">Task Title</label>
+              <label id="lbl-custom-title" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Task Title</label>
               <input type="text" id="custom-title" class="input-glass" placeholder="Doctor appointment, take medicine..." required>
             </div>
 
-            <div class="form-group">
-              <label id="lbl-custom-note">Note / Details (Optional)</label>
-              <input type="text" id="custom-note" class="input-glass" placeholder="Any extra instructions">
+            <div class="form-group mt-2">
+              <label id="lbl-custom-note" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Note / Details (Optional)</label>
+              <input type="text" id="custom-note" class="input-glass" placeholder="Extra details or instructions">
             </div>
 
-            <div class="form-group">
-              <label id="lbl-custom-datetime">Date & Time</label>
+            <div class="form-group mt-2">
+              <label id="lbl-custom-datetime" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Date & Time</label>
               <input type="datetime-local" id="custom-datetime" class="input-glass" required>
             </div>
 
-            <div class="form-group">
-              <label id="lbl-custom-priority">Priority</label>
+            <div class="form-group mt-2">
+              <label id="lbl-custom-priority" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Priority</label>
               <select id="custom-priority" class="input-glass">
-                <option value="high">High ⭐ (Urgent Alert)</option>
+                <option value="high">High Priority</option>
                 <option value="normal" selected>Normal</option>
                 <option value="low">Low</option>
               </select>
@@ -200,28 +220,27 @@
           </form>
         </div>
 
-        <!-- 3. Rozana (Daily Repeat Until End Date) Mode -->
+        <!-- 3. Rozana (Daily Recurring) Mode -->
         <div id="box-mode-daily" class="card-glass hidden">
           <div class="card-title-row">
             <h2 id="lbl-daily-heading">Rozana (Daily)</h2>
-            <span class="pill-tag">Recurring</span>
+            <span class="pill-tag">Everyday Alarm</span>
           </div>
 
           <form id="form-daily">
             <div class="form-group">
-              <label id="lbl-daily-task">Daily Task</label>
-              <input type="text" id="daily-msg" class="input-glass" placeholder="Take evening medicine, check emails..." required>
+              <label id="lbl-daily-task" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Daily Task</label>
+              <input type="text" id="daily-msg" class="input-glass" placeholder="Take evening medicine, read book..." required>
             </div>
 
-            <div class="form-group">
-              <label id="lbl-daily-time">Repeat Time Every Day</label>
+            <div class="form-group mt-2">
+              <label id="lbl-daily-time" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Alarm Time Every Day</label>
               <input type="time" id="daily-time" class="input-glass" value="09:00" required>
             </div>
 
-            <div class="form-group">
-              <label id="lbl-daily-enddate">End Date (Optional - Kis Date Tak?)</label>
+            <div class="form-group mt-2">
+              <label id="lbl-daily-enddate" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">End Date (Optional)</label>
               <input type="date" id="daily-enddate" class="input-glass">
-              <small style="color:var(--text-muted); font-size:11px; margin-top:4px; display:block;">Leave blank to repeat every day forever</small>
             </div>
 
             <button type="submit" class="btn-pill btn-forest mt-3" id="btn-daily-save">
@@ -230,31 +249,31 @@
           </form>
         </div>
 
-        <!-- 4. Remind Someone / Contact Mode -->
+        <!-- 4. Remind Someone Mode -->
         <div id="box-mode-contact" class="card-glass hidden">
           <div class="card-title-row">
             <h2 id="lbl-contact-heading">Remind Someone</h2>
-            <span class="pill-tag">Notification</span>
+            <span class="pill-tag">Personal Contact</span>
           </div>
 
           <form id="form-contact">
             <div class="form-group">
-              <label id="lbl-contact-name">Person Name</label>
+              <label id="lbl-contact-name" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Person Name</label>
               <input type="text" id="contact-name" class="input-glass" placeholder="Friend, Colleague, Family" required>
             </div>
 
-            <div class="form-group">
-              <label id="lbl-contact-phone">Phone Number (Optional)</label>
+            <div class="form-group mt-2">
+              <label id="lbl-contact-phone" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Phone Number (Optional)</label>
               <input type="tel" id="contact-phone" class="input-glass" placeholder="+91 98765 43210">
             </div>
 
-            <div class="form-group">
-              <label id="lbl-contact-msg">Reminder Message</label>
-              <input type="text" id="contact-title" class="input-glass" placeholder="Return books, send invoice..." required>
+            <div class="form-group mt-2">
+              <label id="lbl-contact-msg" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Reminder Message</label>
+              <input type="text" id="contact-title" class="input-glass" placeholder="Return books, submit document..." required>
             </div>
 
-            <div class="form-group">
-              <label id="lbl-contact-datetime">When to Remind</label>
+            <div class="form-group mt-2">
+              <label id="lbl-contact-datetime" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">When to Remind</label>
               <input type="datetime-local" id="contact-datetime" class="input-glass" required>
             </div>
 
@@ -279,11 +298,16 @@
           <!-- Dynamically Rendered Cards -->
         </div>
 
-        <div id="list-empty-state" class="card-glass text-center hidden" style="padding:40px 20px;">
-          <div style="font-size:40px; margin-bottom:12px;">⏰</div>
-          <h3 id="lbl-empty-title" style="font-size:16px; margin-bottom:6px;">No Reminders</h3>
-          <p id="lbl-empty-sub" style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">Schedule your first reminder in seconds.</p>
-          <button type="button" class="btn-pill btn-secondary" onclick="switchNav('create')">+ Add Reminder</button>
+        <div id="list-empty-state" class="card-glass text-center hidden" style="padding:48px 20px;">
+          <div style="width:48px; height:48px; border-radius:50%; background:var(--emerald-light); color:var(--emerald-primary); display:flex; align-items:center; justify-content:center; margin:0 auto 14px auto;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px; height:24px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </div>
+          <h3 id="lbl-empty-title" style="font-size:16px; margin-bottom:6px;">No Active Reminders</h3>
+          <p id="lbl-empty-sub" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">Schedule your first reminder in seconds.</p>
+          <button type="button" class="btn-pill btn-secondary" style="max-width:200px; margin:0 auto;" onclick="switchNav('create')">+ Add Reminder</button>
         </div>
       </section>
 
@@ -293,21 +317,21 @@
       <section id="view-subscription" class="view">
         <div class="card-glass">
           
-          <!-- Owner VIP Notice (Only shown if Owner visits) -->
+          <!-- Owner VIP Notice -->
           <div id="box-owner-plan-vip" class="vip-owner-card hidden">
             <div class="vip-owner-icon">👑</div>
             <div>
               <div class="vip-owner-title">Owner VIP Access</div>
-              <div class="vip-owner-sub">You have 100% Lifetime Free Access. No plans or payments needed!</div>
+              <div class="vip-owner-sub">You have 100% Lifetime Free Access. No plans or payments needed.</div>
             </div>
           </div>
 
-          <!-- Active Subscription Notice (Shown if user has active coupon/plan) -->
+          <!-- Active Subscription Notice -->
           <div id="box-user-active-vip" class="vip-owner-card hidden">
-            <div class="vip-owner-icon">✨</div>
+            <div class="vip-owner-icon">✓</div>
             <div>
               <div class="vip-owner-title" id="user-active-plan-title">Subscription Active</div>
-              <div class="vip-owner-sub" id="user-active-plan-sub">All premium reminder features are unlocked!</div>
+              <div class="vip-owner-sub" id="user-active-plan-sub">All premium features are fully unlocked.</div>
             </div>
           </div>
 
@@ -318,36 +342,40 @@
               <span class="pill-tag" id="sub-current-badge">10-Day Trial</span>
             </div>
 
-            <p id="lbl-sub-desc" style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
-              Enjoy seamless automated in-app and lock-screen push notifications.
+            <p id="lbl-sub-desc" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">
+              Automated in-app alarms and native lock-screen push alerts.
             </p>
 
-            <!-- Plan 1: Monthly Autopay -->
-            <div class="sub-plan-card selected" id="card-plan-monthly" onclick="selectPlan('monthly')">
-              <div class="plan-info">
-                <h3 id="lbl-plan-monthly">Monthly Autopay</h3>
-                <p>Base ₹20.00 + ₹0.50 Fee</p>
+            <!-- Monthly Plan -->
+            <div class="card-glass" style="margin-bottom:10px; cursor:pointer;" id="card-plan-monthly" onclick="selectPlan('monthly')">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                  <h3 style="font-size:15px; font-weight:700;" id="lbl-plan-monthly">Monthly Autopay</h3>
+                  <p style="font-size:12px; color:var(--text-tertiary); margin-top:2px;">₹20.00 + ₹0.50 fee</p>
+                </div>
+                <div style="font-size:18px; font-weight:800; color:var(--emerald-primary);">₹20.50<span style="font-size:11px; font-weight:500;">/mo</span></div>
               </div>
-              <div class="plan-price">₹20.50<span style="font-size:11px; font-weight:500;">/mo</span></div>
             </div>
 
-            <!-- Plan 2: Yearly Autopay -->
-            <div class="sub-plan-card" id="card-plan-yearly" onclick="selectPlan('yearly')">
-              <div class="plan-info">
-                <h3 id="lbl-plan-yearly">Yearly Autopay</h3>
-                <p>Base ₹150.00 + ₹4.00 Fee • Best Value</p>
+            <!-- Yearly Plan -->
+            <div class="card-glass" style="margin-bottom:14px; cursor:pointer;" id="card-plan-yearly" onclick="selectPlan('yearly')">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                  <h3 style="font-size:15px; font-weight:700;" id="lbl-plan-yearly">Yearly Autopay</h3>
+                  <p style="font-size:12px; color:var(--text-tertiary); margin-top:2px;">₹150.00 + ₹4.00 fee • Best Value</p>
+                </div>
+                <div style="font-size:18px; font-weight:800; color:var(--emerald-primary);">₹154.00<span style="font-size:11px; font-weight:500;">/yr</span></div>
               </div>
-              <div class="plan-price">₹154.00<span style="font-size:11px; font-weight:500;">/yr</span></div>
             </div>
 
-            <button type="button" class="btn-pill btn-forest mt-3" id="btn-start-autopay" onclick="startRazorpayAutopay()">
+            <button type="button" class="btn-pill btn-forest" id="btn-start-autopay" onclick="startRazorpayAutopay()">
               Activate Autopay
             </button>
           </div>
 
           <!-- Coupon Code Section -->
-          <div class="mt-4 pt-3" style="border-top:1px solid rgba(0,0,0,0.06);">
-            <label style="font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Have a Coupon Code?</label>
+          <div class="mt-4 pt-3" style="border-top:1px solid var(--border-subtle);">
+            <label style="font-size:12px; font-weight:700; color:var(--text-secondary);">HAVE A COUPON CODE?</label>
             <div style="display:flex; gap:8px; margin-top:6px;">
               <input type="text" id="coupon-input" class="input-glass" placeholder="FREE1M-XXXXXX" style="text-transform:uppercase;">
               <button type="button" class="btn-pill btn-secondary" style="width:auto; padding:0 20px;" onclick="applyCouponCode()">Apply</button>
@@ -370,26 +398,26 @@
           <div id="settings-owner-card" class="vip-owner-card hidden">
             <div class="vip-owner-icon">👑</div>
             <div>
-              <div class="vip-owner-title">Owner VIP Status</div>
-              <div class="vip-owner-sub">Lifetime 100% Free Access (₹0) Active</div>
+              <div class="vip-owner-title">Owner VIP Access</div>
+              <div class="vip-owner-sub">Lifetime 100% Free Plan (₹0) Active</div>
             </div>
           </div>
 
           <!-- Enable Push Notifications -->
           <div class="form-group">
-            <label id="lbl-notif-perm">Lock-Screen Notifications</label>
+            <label id="lbl-notif-perm" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Lock-Screen Notifications</label>
             <button type="button" class="btn-pill btn-secondary" id="btn-enable-push" onclick="enablePushNotifications()">
-              🔔 Enable Push Alerts
+              Enable Push Alerts
             </button>
           </div>
 
           <!-- Customer Support Section -->
           <div class="form-group mt-3">
-            <label id="lbl-support-heading">Customer Support</label>
-            <div style="background:rgba(255,255,255,0.85); padding:14px; border-radius:18px; border:1px solid var(--glass-border-subtle);">
-              <p style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">For queries, feedback or technical assistance:</p>
+            <label id="lbl-support-heading" style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:6px; display:block;">Customer Support</label>
+            <div style="background:#F9FAFB; padding:14px; border-radius:18px; border:1px solid var(--border-subtle);">
+              <p style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">For inquiries, feedback or assistance:</p>
               <a href="mailto:supportrememberme@gmail.com" class="btn-pill btn-forest" style="text-decoration:none; padding:10px 18px; font-size:13px; display:inline-block;">
-                ✉️ Email: supportrememberme@gmail.com
+                Email Support: supportrememberme@gmail.com
               </a>
             </div>
           </div>
@@ -397,21 +425,21 @@
           <!-- Share App Button -->
           <div class="form-group mt-3">
             <button type="button" class="btn-pill btn-secondary" onclick="shareReminderMeApp()">
-              📲 Share Reminder Me App
+              Share Reminder Me App
             </button>
           </div>
 
           <!-- Logout Button -->
           <div class="form-group mt-3">
             <button type="button" class="btn-pill btn-secondary" onclick="logoutUser()">
-              🚪 Log Out
+              Log Out
             </button>
           </div>
 
           <!-- Delete Account Button (DPDP Compliance) -->
-          <div class="form-group mt-4 pt-3" style="border-top:1px solid rgba(0,0,0,0.06);">
+          <div class="form-group mt-4 pt-3" style="border-top:1px solid var(--border-subtle);">
             <button type="button" class="btn-pill btn-danger-outline" onclick="deleteUserAccount()">
-              🗑️ Delete My Account & Data
+              Delete My Account & Data
             </button>
           </div>
         </div>
@@ -423,8 +451,8 @@
       <section id="view-admin" class="view">
         <div class="card-glass">
           <div class="card-title-row">
-            <h2>👑 Owner Admin Panel</h2>
-            <span class="pill-tag" style="background:#0F5132; color:#fff;">Super Admin</span>
+            <h2>Owner Admin Panel</h2>
+            <span class="pill-tag" style="background:var(--emerald-primary); color:#fff;">Super Admin</span>
           </div>
 
           <!-- Dashboard Stats Grid -->
@@ -449,11 +477,11 @@
 
           <!-- Export Data Button -->
           <button type="button" class="btn-pill btn-forest mb-3" onclick="exportAdminDataCSV()">
-            📥 Export Users to CSV (Excel)
+            Export Users to CSV
           </button>
 
           <!-- Generate Coupons -->
-          <div class="mt-3 p-3" style="background:rgba(255,255,255,0.7); border-radius:18px;">
+          <div class="mt-3 p-3" style="background:#F9FAFB; border-radius:18px; border:1px solid var(--border-subtle);">
             <label style="font-size:12px; font-weight:700;">Generate Single-Use Coupons</label>
             <div style="display:flex; gap:8px; margin-top:6px;">
               <select id="admin-coupon-type" class="input-glass" style="flex:1;">
@@ -462,7 +490,7 @@
               </select>
               <button type="button" class="btn-pill btn-secondary" style="width:auto; padding:0 18px;" onclick="generateAdminCoupons()">+ Generate</button>
             </div>
-            <div id="admin-generated-codes" class="mt-2" style="font-size:12px; font-family:monospace; color:var(--forest-green);"></div>
+            <div id="admin-generated-codes" class="mt-2" style="font-size:12px; font-family:monospace; color:var(--emerald-primary);"></div>
           </div>
 
           <!-- Users Table -->
@@ -538,16 +566,25 @@
     <!-- Global Toast Pill -->
     <div id="toast" class="toast-pill"></div>
 
-    <!-- In-App Notification / Alarm Popup Modal -->
-    <div id="alarm-modal" class="modal-backdrop hidden">
-      <div class="alarm-dialog-card">
-        <div class="alarm-bell-icon">🔔</div>
-        <div class="alarm-time-tag" id="alarm-time-display">10:30 PM</div>
-        <h3 class="alarm-title" id="alarm-title-display">Meeting Reminder</h3>
-        <p class="alarm-message" id="alarm-message-display">Prepare project report</p>
-        <div class="alarm-actions">
-          <button type="button" class="btn-pill btn-forest" id="btn-alarm-dismiss" onclick="dismissCurrentAlarm()">✓ Done / Dismiss</button>
-          <button type="button" class="btn-pill btn-secondary" id="btn-alarm-snooze" onclick="snoozeCurrentAlarm(5)">💤 Snooze 5 Min</button>
+    <!-- 🌸 Aesthetic Energy Reading Card Modal (Matches Image 3) -->
+    <div id="aesthetic-card-modal" class="modal-backdrop hidden" onclick="closeAestheticModal()">
+      <div class="aesthetic-card-box" onclick="event.stopPropagation()">
+        <div class="aesthetic-card-header">
+          <span class="aesthetic-card-caption">R E M I N D E R</span>
+          <button type="button" class="aesthetic-close-x" onclick="closeAestheticModal()">✕</button>
+        </div>
+        <div class="aesthetic-card-image-wrap">
+          <img src="/images/card-art.jpg" alt="Aesthetic Serene Peony" class="aesthetic-art-img">
+        </div>
+        <div class="aesthetic-card-content">
+          <h3 class="aesthetic-task-title" id="aesthetic-task-title">Drink Water</h3>
+          <p class="aesthetic-quote" id="aesthetic-quote-display">
+            "Every moment is a fresh beginning. Take a deep breath and accomplish your task."
+          </p>
+          <div class="aesthetic-time-tag" id="aesthetic-time-tag">9:45 PM</div>
+        </div>
+        <div class="aesthetic-card-footer">
+          <button type="button" class="btn-aesthetic-done" onclick="markAestheticDone()">Mark as Done ✓</button>
         </div>
       </div>
     </div>

@@ -130,12 +130,26 @@ const dbAsync = {
       return [...memoryDb.users].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
 
-    // 4. Scheduler JOIN query:
+    // 4. In-App Due Check: SELECT * FROM reminders WHERE userId = ? AND status = 'pending' AND reminderTime <= ?
+    if (s.includes('from reminders where userid =') && s.includes('status = \'pending\'')) {
+      const nowMs = Date.now();
+      return memoryDb.reminders.filter(r => {
+        if (r.userId !== params[0] || r.status !== 'pending') return false;
+        const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
+        return dueMs <= (nowMs + 5000); // 5s grace
+      });
+    }
+
+    // 5. Scheduler JOIN query:
     // SELECT r.*, u.phone as userPhone, u.email as userEmail, u.planStatus, u.trialEndsAt, u.subscriptionExpiresAt, u.isOwner
     // FROM reminders r JOIN users u ON r.userId = u.id WHERE r.status = 'pending' AND r.reminderTime <= ?
     if (s.includes('from reminders r') && s.includes('join users u')) {
-      const checkTime = params[0];
-      const pending = memoryDb.reminders.filter(r => r.status === 'pending' && r.reminderTime <= checkTime);
+      const nowMs = Date.now();
+      const pending = memoryDb.reminders.filter(r => {
+        if (r.status !== 'pending') return false;
+        const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
+        return dueMs <= nowMs;
+      });
       return pending.map(r => {
         const u = memoryDb.users.find(user => user.id === r.userId) || {};
         return {
@@ -329,6 +343,9 @@ const dbAsync = {
             newReminder[col] = params[idx];
           }
         });
+      }
+      if (!newReminder.reminderTimestamp && newReminder.reminderTime) {
+        newReminder.reminderTimestamp = new Date(newReminder.reminderTime).getTime();
       }
       memoryDb.reminders.push(newReminder);
       saveDatabase();

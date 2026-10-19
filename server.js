@@ -547,11 +547,13 @@ app.post('/api/reminders/quick', authMiddleware, async (req, res) => {
 
     const reminderId = 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const now = new Date().toISOString();
+    const targetTimestamp = req.body.reminderTimestamp || targetDate.getTime();
+    const targetTimeIso = req.body.reminderTime || targetDate.toISOString();
 
     await dbAsync.run(`
-      INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, priority, category, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, 'none', 'normal', 'personal', 'pending', ?)
-    `, [reminderId, req.user.id, message.trim(), message.trim(), targetDate.toISOString(), now]);
+      INSERT INTO reminders (id, userId, title, message, reminderTime, reminderTimestamp, repeat, priority, category, status, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, 'none', 'normal', 'personal', 'pending', ?)
+    `, [reminderId, req.user.id, message.trim(), message.trim(), targetTimeIso, targetTimestamp, now]);
 
     res.status(201).json({
       success: true,
@@ -574,27 +576,28 @@ app.post('/api/reminders/custom', authMiddleware, async (req, res) => {
     if (!title || !title.trim()) {
       return res.status(400).json({ error: 'Title is required' });
     }
-    if (!date || !time) {
-      return res.status(400).json({ error: 'Date and Time are required' });
+
+    let reminderDateTime = new Date();
+    if (date && time) {
+      reminderDateTime = new Date(`${date}T${time}`);
     }
 
-    const reminderDateTime = new Date(`${date}T${time}`);
-    if (isNaN(reminderDateTime.getTime())) {
-      return res.status(400).json({ error: 'Invalid date or time' });
-    }
+    const targetTimestamp = req.body.reminderTimestamp || reminderDateTime.getTime();
+    const targetTimeIso = req.body.reminderTime || reminderDateTime.toISOString();
 
     const reminderId = 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const now = new Date().toISOString();
 
     await dbAsync.run(`
-      INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, priority, category, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+      INSERT INTO reminders (id, userId, title, message, reminderTime, reminderTimestamp, repeat, priority, category, status, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
     `, [
       reminderId,
       req.user.id,
       title.trim(),
       (note || '').trim(),
-      reminderDateTime.toISOString(),
+      targetTimeIso,
+      targetTimestamp,
       repeat || 'none',
       priority || 'normal',
       category || 'personal',
@@ -634,18 +637,22 @@ app.post('/api/reminders/daily', authMiddleware, async (req, res) => {
       firstReminderTime.setDate(firstReminderTime.getDate() + 1);
     }
 
+    const targetTimestamp = req.body.reminderTimestamp || firstReminderTime.getTime();
+    const targetTimeIso = req.body.reminderTime || firstReminderTime.toISOString();
+
     const reminderId = 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const now = new Date().toISOString();
 
     await dbAsync.run(`
-      INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, repeatTime, endDate, priority, category, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, 'daily', ?, ?, ?, 'personal', 'pending', ?)
+      INSERT INTO reminders (id, userId, title, message, reminderTime, reminderTimestamp, repeat, repeatTime, endDate, priority, category, status, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, 'daily', ?, ?, ?, 'personal', 'pending', ?)
     `, [
       reminderId,
       req.user.id,
       title.trim(),
       (note || '').trim(),
-      firstReminderTime.toISOString(),
+      targetTimeIso,
+      targetTimestamp,
       time,
       (kisDateTak || '').trim() || null,
       priority || 'normal',
@@ -681,19 +688,23 @@ app.post('/api/reminders/contact', authMiddleware, async (req, res) => {
       targetDate = new Date(Date.now() + 15 * 60000);
     }
 
+    const targetTimestamp = req.body.reminderTimestamp || targetDate.getTime();
+    const targetTimeIso = req.body.reminderTime || targetDate.toISOString();
+
     const cleanPhone = sanitizePhone(phone);
     const reminderId = 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const now = new Date().toISOString();
 
     await dbAsync.run(`
-      INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, priority, category, targetContactPhone, targetContactName, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, 'none', 'high', 'contact', ?, ?, 'pending', ?)
+      INSERT INTO reminders (id, userId, title, message, reminderTime, reminderTimestamp, repeat, priority, category, targetContactPhone, targetContactName, status, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, 'none', 'high', 'contact', ?, ?, 'pending', ?)
     `, [
       reminderId,
       req.user.id,
       title.trim(),
       (note || '').trim(),
-      targetDate.toISOString(),
+      targetTimeIso,
+      targetTimestamp,
       cleanPhone,
       (contactName || '').trim(),
       now
