@@ -140,16 +140,16 @@ const dbAsync = {
       return [...memoryDb.users].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
 
-    // 4. In-App Due Check: SELECT * FROM reminders WHERE userId = ? AND status = 'pending' AND reminderTime <= ?
-    if (s.includes('from reminders where userid =') && s.includes('status = \'pending\'')) {
+    // 4. In-App Due Check: SELECT * FROM reminders WHERE userId = ? AND clientPopped != 1 AND status != 'completed' AND reminderTime <= ?
+    if (s.includes('from reminders where userid =') && (s.includes('clientpopped') || s.includes('status = \'pending\''))) {
       const nowMs = Date.now();
       return memoryDb.reminders.filter(r => {
         if (String(r.userId) !== String(params[0])) return false;
-        if (r.status === 'pending') {
-          const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
-          return dueMs <= (nowMs + 5000); // 5s grace
-        }
-        return false;
+        if (r.status === 'completed') return false;
+        if (r.clientPopped === 1) return false;
+        const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
+        // Due now or in the past (up to 24 hours ago) with 10s grace
+        return dueMs <= (nowMs + 10000) && (nowMs - dueMs < 86400000);
       });
     }
 
@@ -343,6 +343,7 @@ const dbAsync = {
         targetContactPhone: null,
         targetContactName: null,
         status: 'pending',
+        clientPopped: 0,
         sentCount: 0,
         createdAt: new Date().toISOString(),
         sentAt: null,
@@ -430,6 +431,17 @@ const dbAsync = {
       if (r) {
         r.status = 'failed';
         r.error = error;
+        saveDatabase();
+      }
+      return { changes: r ? 1 : 0 };
+    }
+
+    // 19. UPDATE reminders SET clientPopped = 1 WHERE id = ?
+    if (s.includes('update reminders set clientpopped = 1')) {
+      const [id] = params;
+      const r = memoryDb.reminders.find(rem => rem.id === id);
+      if (r) {
+        r.clientPopped = 1;
         saveDatabase();
       }
       return { changes: r ? 1 : 0 };

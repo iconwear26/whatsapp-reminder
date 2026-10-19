@@ -148,56 +148,15 @@ function showToast(msg, duration = 3000) {
   setTimeout(() => toastEl.classList.remove('show'), duration);
 }
 
-// Pre-load sweet chime audio
-let sweetChimeAudio = null;
-try {
-  sweetChimeAudio = new Audio('/sounds/sweet-chime.wav');
-} catch (e) {}
-
-function playNotificationChime() {
-  try {
-    if (sweetChimeAudio) {
-      sweetChimeAudio.currentTime = 0;
-      sweetChimeAudio.play().catch(() => playSynthChime());
-    } else {
-      playSynthChime();
-    }
-  } catch (e) {
-    playSynthChime();
-  }
-}
-
-function playSynthChime() {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-
-    function tone(freq, time, dur = 0.28) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, time);
-      gain.gain.setValueAtTime(0.3, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(time);
-      osc.stop(time + dur);
-    }
-
-    const t = ctx.currentTime;
-    tone(659.25, t, 0.25);        // E5
-    tone(830.61, t + 0.12, 0.28); // G#5
-    tone(987.77, t + 0.24, 0.35); // B5
-    tone(1318.51, t + 0.38, 0.5); // E6
-  } catch (e) {}
-}
+// Web app audio completely silenced - audio only comes from native device notifications
+function playNotificationChime() {}
+function playSynthChime() {}
 
 // -------------------------------------------------------------
 // 📱 iOS STYLE TOP NOTIFICATION SLIDE-DOWN BANNER (Image 2)
 // -------------------------------------------------------------
 function showIosNotificationBanner(reminder) {
+  if (!reminder) return;
   activeViewingReminder = reminder;
 
   iosBannerTitle.textContent = reminder.title || 'Reminder Alert';
@@ -209,6 +168,14 @@ function showIosNotificationBanner(reminder) {
 
   if ('vibrate' in navigator) {
     try { navigator.vibrate([250, 100, 250]); } catch (e) {}
+  }
+
+  // Acknowledge to server so popup won't repeat
+  if (reminder.id && authToken) {
+    fetch(`/api/reminders/${reminder.id}/ack-popup`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    }).catch(() => {});
   }
 
   if (iosBannerTimeout) clearTimeout(iosBannerTimeout);
@@ -224,13 +191,6 @@ function dismissIosBanner() {
     iosBanner.classList.add('hidden');
     iosBanner.classList.remove('hiding');
   }, 300);
-
-  if (activeViewingReminder) {
-    fetch(`/api/reminders/${activeViewingReminder.id}/dismiss`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}` }
-    }).catch(() => {});
-  }
 }
 
 function openAestheticCardFromBanner() {
@@ -324,8 +284,38 @@ async function markAestheticDone() {
   }
 }
 
-// In-App Background Poller for Due Reminders
+// In-App Background Poller & Precision Timers for Due Reminders
 const handledReminderIds = new Set();
+const activeTimers = new Map();
+
+function scheduleReminderTimers(reminders) {
+  if (!Array.isArray(reminders)) return;
+  const nowMs = Date.now();
+  reminders.forEach(r => {
+    if (r.status === 'completed' || r.clientPopped === 1 || handledReminderIds.has(r.id)) return;
+    const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
+    const diff = dueMs - nowMs;
+    if (diff <= 1000 && diff > -300000) {
+      // Due right now or in last 5 minutes!
+      handledReminderIds.add(r.id);
+      showIosNotificationBanner(r);
+    } else if (diff > 1000 && diff < 86400000) {
+      // Set high-precision timer for this exact millisecond
+      if (!activeTimers.has(r.id)) {
+        const timer = setTimeout(() => {
+          activeTimers.delete(r.id);
+          if (!handledReminderIds.has(r.id)) {
+            handledReminderIds.add(r.id);
+            showIosNotificationBanner(r);
+            loadReminders();
+          }
+        }, diff);
+        activeTimers.set(r.id, timer);
+      }
+    }
+  });
+}
+
 async function pollDueReminders() {
   if (!authToken || !currentUser) return;
   try {
@@ -339,13 +329,14 @@ async function pollDueReminders() {
         if (!handledReminderIds.has(rem.id)) {
           handledReminderIds.add(rem.id);
           showIosNotificationBanner(rem);
+          loadReminders();
           break;
         }
       }
     }
   } catch (e) {}
 }
-setInterval(pollDueReminders, 5000);
+setInterval(pollDueReminders, 4000);
 
 // -------------------------------------------------------------
 // LANGUAGE LOCALIZATION SYSTEM
@@ -684,6 +675,7 @@ async function loadReminders() {
       headers: { Authorization: `Bearer ${authToken}` }
     });
     currentReminders = await res.json();
+    scheduleReminderTimers(currentReminders);
     renderReminders();
   } catch (err) {
     console.error('Error fetching reminders:', err);
@@ -703,9 +695,34 @@ function renderReminders() {
     if (msgboxContainer) msgboxContainer.classList.add('hidden');
     if (msgboxEmpty) msgboxEmpty.classList.add('hidden');
 
-    // Filter pending/active reminders
-    const activeList = currentReminders.filter(r => r.status === 'pending');
-    if (countBadge) countBadge.textContent = `${activeList.length} Active`;
+    // Keep all non-completed reminders visible (upcoming pending + delivered)
+    const activeList = currentReminders.filter(r => r.status !== 'completed');
+
+    // Sort: Upcoming pending first (soonest first), followed by delivered items
+    activeList.sort((a, b) => {
+      const isPendA = a.status === 'pending';
+      const isPendB = b.status === 'pending';
+      if (isPendA && !isPendB) return -1;
+      if (!isPendA && isPendB) return 1;
+      const timeA = a.reminderTimestamp || new Date(a.reminderTime).getTime();
+      const timeB = b.reminderTimestamp || new Date(b.reminderTime).getTime();
+      return isPendA ? (timeA - timeB) : (timeB - timeA);
+    });
+
+    const pendingCount = activeList.filter(r => r.status === 'pending').length;
+    const deliveredCount = activeList.filter(r => r.status === 'sent').length;
+
+    if (countBadge) {
+      if (pendingCount > 0 && deliveredCount > 0) {
+        countBadge.textContent = `${pendingCount} Upcoming • ${deliveredCount} Delivered`;
+      } else if (pendingCount > 0) {
+        countBadge.textContent = `${pendingCount} Upcoming`;
+      } else if (deliveredCount > 0) {
+        countBadge.textContent = `${deliveredCount} Delivered`;
+      } else {
+        countBadge.textContent = `${activeList.length} Active`;
+      }
+    }
 
     if (activeList.length === 0) {
       if (activeContainer) activeContainer.innerHTML = '';
@@ -721,20 +738,33 @@ function renderReminders() {
         const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 
         const isDaily = r.repeat === 'daily';
+        const isDelivered = r.status === 'sent';
+        const statusBadge = isDelivered
+          ? `<span class="pill-tag" style="background:#ECFDF5; color:#059669; border:1px solid #A7F3D0; font-weight:600;">✓ Delivered</span>`
+          : `<span class="pill-tag" style="background:var(--emerald-light); color:var(--emerald-primary); font-weight:600;">⏰ Upcoming</span>`;
+
         const contactBadge = r.targetContactName ? `<span class="pill-tag">For: ${escapeHtml(r.targetContactName)}</span>` : '';
         const dailyBadge = isDaily ? `<span class="pill-tag">Daily (${r.repeatTime})</span>` : '';
         const shareContactBtn = r.targetContactPhone
           ? `<button class="mini-btn mini-send" onclick="event.stopPropagation(); shareReminderDirectly('${r.targetContactPhone}', '🔔 Reminder Me: ${escapeHtml(r.title)} scheduled for ${dateFormatted}, ${timeFormatted}. Open: ${window.location.origin}')">Share 📲</button>`
           : '';
 
+        const snoozeBtn = isDelivered
+          ? `<button class="mini-btn" style="background:#FEF3C7; color:#92400E; font-weight:600;" onclick="event.stopPropagation(); snoozeReminder('${r.id}', 10)">+10m</button>`
+          : '';
+        const doneBtn = isDelivered
+          ? `<button class="mini-btn" style="background:#D1FAE5; color:#065F46; font-weight:600;" onclick="event.stopPropagation(); dismissReminderDirect('${r.id}')">Done ✓</button>`
+          : '';
+
         return `
-          <div class="reminder-item" onclick="openAestheticModalById('${r.id}')">
+          <div class="reminder-item" onclick="openAestheticModalById('${r.id}')" style="${isDelivered ? 'border-left: 3px solid #10B981;' : ''}">
             <div class="reminder-header-row">
               <div>
                 <div class="reminder-text">${escapeHtml(r.title)}</div>
                 ${r.message && r.message !== r.title ? `<p style="font-size:13px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
               </div>
-              <div style="display:flex; gap:4px; flex-wrap:wrap;">
+              <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+                ${statusBadge}
                 ${dailyBadge}
                 ${contactBadge}
               </div>
@@ -744,8 +774,10 @@ function renderReminders() {
               <div class="reminder-time-chip">${dateFormatted}, ${timeFormatted}</div>
               <div class="reminder-actions-btns" onclick="event.stopPropagation()">
                 ${shareContactBtn}
-                <button class="mini-btn mini-send" onclick="testPlayReminder('${r.id}')">View</button>
-                <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')">Delete</button>
+                ${snoozeBtn}
+                ${doneBtn}
+                <button class="mini-btn mini-send" onclick="testPlayReminder('${r.id}')">View 🌸</button>
+                <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')">✕</button>
               </div>
             </div>
           </div>
@@ -846,6 +878,40 @@ async function deleteReminder(id) {
     }
   } catch (e) {
     showToast('Error deleting reminder');
+  }
+}
+
+async function snoozeReminder(id, minutes = 10) {
+  try {
+    const res = await fetch(`/api/reminders/${id}/snooze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ minutes })
+    });
+    if (res.ok) {
+      showToast(`✓ Snoozed for ${minutes} mins`);
+      loadReminders();
+    }
+  } catch (e) {
+    showToast('Failed to snooze');
+  }
+}
+
+async function dismissReminderDirect(id) {
+  try {
+    const res = await fetch(`/api/reminders/${id}/dismiss`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    if (res.ok) {
+      showToast('✓ Completed');
+      loadReminders();
+    }
+  } catch (e) {
+    showToast('Failed to complete');
   }
 }
 

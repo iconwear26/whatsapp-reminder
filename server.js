@@ -312,6 +312,7 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
 
+    const subs = await dbAsync.all('SELECT * FROM push_subscriptions WHERE userId = ?', [user.id]);
     res.json({
       success: true,
       token,
@@ -326,7 +327,8 @@ app.post('/api/auth/login', async (req, res) => {
         hasActiveAccess,
         trialDaysRemaining,
         trialEndsAt: user.trialEndsAt,
-        subscriptionExpiresAt: user.subscriptionExpiresAt
+        subscriptionExpiresAt: user.subscriptionExpiresAt,
+        hasPushSubscription: subs.length > 0
       }
     });
   } catch (err) {
@@ -512,13 +514,22 @@ app.get('/api/reminders', authMiddleware, async (req, res) => {
 app.get('/api/reminders/due-notifications', authMiddleware, async (req, res) => {
   try {
     const now = new Date();
-    // Check reminders due in the last 2 minutes or pending & <= now
     const dueReminders = await dbAsync.all(
-      `SELECT * FROM reminders WHERE userId = ? AND status = 'pending' AND reminderTime <= ?`,
+      `SELECT * FROM reminders WHERE userId = ? AND clientPopped != 1 AND status != 'completed' AND reminderTime <= ?`,
       [req.user.id, now.toISOString()]
     );
 
     res.json({ due: dueReminders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Acknowledge in-app popup so it doesn't pop up again
+app.post('/api/reminders/:id/ack-popup', authMiddleware, async (req, res) => {
+  try {
+    await dbAsync.run('UPDATE reminders SET clientPopped = 1 WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
