@@ -87,6 +87,7 @@ async function authMiddleware(req, res, next) {
 
   const token = authHeader.split(' ')[1];
   try {
+    const decoded = jwt.verify(token, JWT_SECRET);
     let user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [decoded.userId]);
     if (!user) {
       if (decoded.userId === 'usr_owner_deepak') {
