@@ -38,11 +38,6 @@ jobs:
       - name: Make Gradlew Executable
         run: chmod +x android/gradlew
 
-      - name: Copy & Update Capacitor Android
-        run: |
-          npx @capacitor/cli copy android
-          npx @capacitor/cli update android
-
       - name: Build Debug APK
         run: |
           cd android
