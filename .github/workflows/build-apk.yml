@@ -35,27 +35,21 @@ jobs:
       - name: Install Dependencies
         run: npm install --include=dev
 
-      - name: Make Gradlew Executable & Accept Licenses
+      - name: Make Gradlew Executable & Setup Android SDK 35
         run: |
           chmod +x android/gradlew
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon > ../gradle.log 2>&1 || true
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon
           cd ..
-          echo "### Gradle Log Tail" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -n 60 gradle.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "### Found APKs" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          find android -name "*.apk" >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
           mkdir -p release-output
           find android -name "*.apk" -exec cp -v {} release-output/ReminderMe.apk \;
-          test -f release-output/ReminderMe.apk || exit 1
+          test -f release-output/ReminderMe.apk || { echo "ERROR: APK not found!"; exit 1; }
+          ls -la release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
