@@ -157,9 +157,9 @@ const dbAsync = {
   run: async (sql, params = []) => {
     const s = sql.trim().toLowerCase();
 
-    // 1. INSERT INTO users (id, fullName, email, phone, passwordHash, planStatus, trialEndsAt, createdAt)
+    // 1. INSERT INTO users
     if (s.startsWith('insert into users')) {
-      const [id, fullName, email, phone, passwordHash, planStatus, trialEndsAt, createdAt] = params;
+      const [id, fullName, email, phone, passwordHash, planStatus, trialEndsAt, subscriptionExpiresAt, isOwner, createdAt, lastLoginAt] = params;
       const newUser = {
         id,
         fullName,
@@ -168,11 +168,11 @@ const dbAsync = {
         passwordHash,
         planStatus: planStatus || 'trial',
         trialEndsAt,
+        subscriptionExpiresAt: subscriptionExpiresAt || null,
+        isOwner: isOwner ? 1 : 0,
         createdAt: createdAt || new Date().toISOString(),
-        subscriptionExpiresAt: null,
         razorpaySubscriptionId: null,
-        isOwner: 0,
-        lastLoginAt: new Date().toISOString()
+        lastLoginAt: lastLoginAt || new Date().toISOString()
       };
       memoryDb.users.push(newUser);
       saveDatabase();
