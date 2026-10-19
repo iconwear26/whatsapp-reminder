@@ -857,7 +857,6 @@ app.post('/api/push/test', authMiddleware, async (req, res) => {
       body: 'Lock-screen notifications and sweet chime sound working perfectly! 🌸',
       icon: '/icons/icon-192.png',
       badge: '/icons/badge-96.png',
-      image: '/images/art_morning_sun.jpg',
       data: { test: true }
     });
     res.json({ success: true, message: '✓ Test notification sent! Check your notification tray or lock screen.' });
@@ -991,7 +990,7 @@ setInterval(async () => {
         ];
         const artImage = dynamicArtImages[Math.floor(Math.random() * dynamicArtImages.length)];
 
-        // Dispatch Native Push Notification to User's Phone & Lock Screen
+        // Dispatch Native Push Notification to User's Phone & Lock Screen (Text Only, No Image)
         await sendWebPushToUser(reminder.userId, {
           title: '🔔 Reminder Me: ' + reminder.title,
           body: reminder.message && reminder.message !== reminder.title 
@@ -999,7 +998,6 @@ setInterval(async () => {
             : `Scheduled reminder is due (${dueTime})`,
           icon: '/icons/icon-192.png',
           badge: '/icons/badge-96.png',
-          image: artImage,
           data: { reminderId: reminder.id }
         });
 
@@ -1012,7 +1010,6 @@ setInterval(async () => {
               body: `${reminder.message || reminder.title} (${dueTime})`,
               icon: '/icons/icon-192.png',
               badge: '/icons/badge-96.png',
-              image: artImage,
               data: { reminderId: reminder.id }
             });
           }

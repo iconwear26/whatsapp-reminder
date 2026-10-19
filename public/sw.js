@@ -1,5 +1,5 @@
 // Service Worker for Reminder Me App
-const CACHE_NAME = 'reminder-me-v5';
+const CACHE_NAME = 'reminder-me-v6';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -44,7 +44,7 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// Push notification received
+// Push notification received - ONLY TEXT & ICON ON LOCK SCREEN (NO LARGE IMAGE)
 self.addEventListener('push', (e) => {
   let data = { title: '🔔 Reminder Me', body: 'You have a scheduled reminder!' };
   if (e.data) {
@@ -59,16 +59,12 @@ self.addEventListener('push', (e) => {
     body: data.body || 'Scheduled task is due now.',
     icon: '/icons/icon-192.png',
     badge: '/icons/badge-96.png',
-    image: data.image || '/images/art_morning_sun.jpg',
     vibrate: [250, 100, 250, 100, 250],
     sound: '/sounds/sweet-chime.wav',
     tag: 'reminder-' + (data.data?.reminderId || Date.now()),
     renotify: true,
     requireInteraction: true,
-    data: { url: '/', reminderId: data.data?.reminderId },
-    actions: [
-      { action: 'open', title: 'Open & Read 🌸' }
-    ]
+    data: { url: '/', reminderId: data.data?.reminderId }
   };
 
   e.waitUntil(
