@@ -43,14 +43,19 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon
-          echo "=== SEARCHING FOR ALL BUILT APKS ==="
-          find . -name "*.apk"
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon > ../gradle.log 2>&1 || true
           cd ..
+          echo "### Gradle Log Tail" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 60 gradle.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "### Found APKs" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          find android -name "*.apk" >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
           mkdir -p release-output
           find android -name "*.apk" -exec cp -v {} release-output/ReminderMe.apk \;
-          test -f release-output/ReminderMe.apk || { echo "ERROR: ReminderMe.apk was not found!"; find android/app/build -maxdepth 4; exit 1; }
-          ls -la release-output/
+          test -f release-output/ReminderMe.apk || exit 1
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
