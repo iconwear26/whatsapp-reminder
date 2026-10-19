@@ -527,7 +527,8 @@ app.post('/api/reminders/quick', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Your 10-day trial has ended. Please subscribe or apply coupon.' });
     }
 
-    const { message, minutes, preset } = req.body;
+    const message = req.body.message || req.body.text;
+    const { minutes, preset } = req.body;
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
     }
