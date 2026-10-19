@@ -1,11 +1,11 @@
 {
-  "name": "WhatsApp Reminder",
-  "short_name": "WAReminder",
-  "description": "Save reminders and get alerted on WhatsApp",
+  "name": "Reminder Me",
+  "short_name": "ReminderMe",
+  "description": "Smart WhatsApp & Push Reminders with 10-day trial",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#075E54",
-  "theme_color": "#128C7E",
+  "background_color": "#F4EFEA",
+  "theme_color": "#0F5132",
   "icons": [
     {
       "src": "/icons/icon.svg",

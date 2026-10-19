@@ -1,68 +1,104 @@
-// WhatsApp Reminder App - Client Logic
+// Reminder Me - Client Application Logic
 
+// Localization Dictionaries (English Default & Hindi)
+const i18n = {
+  en: {
+    appName: 'Reminder Me',
+    trialText: '10-Day Free Trial',
+    trialDaysLeft: '{days} Days Left',
+    create: 'Create',
+    reminders: 'Reminders',
+    plans: 'Plans',
+    settings: 'Settings',
+    quick: 'Quick Reminder',
+    custom: 'Custom Reminder',
+    daily: 'Daily Reminder',
+    contact: 'Remind Contact',
+    whatToRemember: 'What do you want to remember?',
+    saveDefault: 'Save ({time} Min Default)',
+    saveCustom: 'Save Custom Reminder',
+    saveDaily: 'Save Daily Reminder',
+    saveContact: 'Schedule Contact Reminder',
+    noReminders: 'No Reminders',
+    noRemindersSub: 'Schedule your first reminder in seconds.',
+    monthlyPlan: 'Monthly Autopay',
+    yearlyPlan: 'Yearly Autopay',
+    haveCoupon: 'Have a Coupon Code?',
+    apply: 'Apply',
+    lockScreenNotif: 'Lock-Screen Notifications',
+    enablePush: '🔔 Enable Push Alerts',
+    customerSupport: 'Customer Support',
+    shareApp: '📲 Share Reminder Me App',
+    logout: '🚪 Log Out',
+    deleteAccount: '🗑️ Delete My Account & Data',
+    switchLangBtn: 'हिन्दी'
+  },
+  hi: {
+    appName: 'Reminder Me',
+    trialText: '10 दिन का फ्री ट्रायल',
+    trialDaysLeft: '{days} दिन बचे हैं',
+    create: 'बनाएं (+)',
+    reminders: 'रिमाइंडर',
+    plans: 'प्लान्स',
+    settings: 'सेटिंग्स',
+    quick: 'क्विक रिमाइंडर',
+    custom: 'कस्टम रिमाइंडर',
+    daily: 'रोजाना रिमाइंडर',
+    contact: 'कांटेक्ट को याद दिलाएं',
+    whatToRemember: 'आपको क्या याद रखना है?',
+    saveDefault: 'सेव करें ({time} मिनट)',
+    saveCustom: 'कस्टम रिमाइंडर सेव करें',
+    saveDaily: 'रोजाना रिमाइंडर सेव करें',
+    saveContact: 'कांटेक्ट रिमाइंडर सेट करें',
+    noReminders: 'कोई रिमाइंडर नहीं है',
+    noRemindersSub: 'चंद सेकंड में अपना पहला रिमाइंडर सेट करें।',
+    monthlyPlan: 'मंथली ऑटोपे',
+    yearlyPlan: 'सालाना ऑटोपे',
+    haveCoupon: 'कूपन कोड है?',
+    apply: 'अप्लाई करें',
+    lockScreenNotif: 'लॉक-स्क्रीन नोटिफिकेशन',
+    enablePush: '🔔 पुश अलर्ट चालू करें',
+    customerSupport: 'कस्टमर सपोर्ट',
+    shareApp: '📲 रिमाइंडर मी ऐप शेयर करें',
+    logout: '🚪 लॉग आउट',
+    deleteAccount: '🗑️ मेरा अकाउंट और डेटा डिलीट करें',
+    switchLangBtn: 'English'
+  }
+};
+
+let currentLang = localStorage.getItem('reminder_me_lang') || 'en';
+let authToken = localStorage.getItem('reminder_me_token') || null;
+let currentUser = null;
+let selectedPlan = 'monthly';
 let currentReminders = [];
-let currentFilter = 'all';
-let mobileUrl = '';
-let currentDefaultDelay = 15;
-let currentDailyEndMode = 'forever';
 
 // DOM Elements
 const views = {
-  add: document.getElementById('view-add'),
+  auth: document.getElementById('view-auth'),
+  create: document.getElementById('view-create'),
   list: document.getElementById('view-list'),
+  subscription: document.getElementById('view-subscription'),
   settings: document.getElementById('view-settings'),
-  guide: document.getElementById('view-guide')
+  admin: document.getElementById('view-admin')
 };
 
-const navItems = document.querySelectorAll('.nav-item');
-const quickReminderForm = document.getElementById('quick-reminder-form');
-const dailyReminderForm = document.getElementById('daily-reminder-form');
-const customReminderForm = document.getElementById('reminder-form');
-const settingsForm = document.getElementById('settings-form');
-const statusPill = document.getElementById('status-pill');
-const statusText = document.getElementById('status-text');
-const remindersContainer = document.getElementById('reminders-container');
-const emptyState = document.getElementById('empty-state');
 const toastEl = document.getElementById('toast');
-const qrBtn = document.getElementById('qr-btn');
-const qrModal = document.getElementById('qr-modal');
-const testWaBtn = document.getElementById('test-wa-btn');
-const disconnectWaBtn = document.getElementById('disconnect-wa-btn');
-const themeToggleBtn = document.getElementById('theme-toggle-btn');
-const themeIcon = document.getElementById('theme-icon');
+const langToggleBtn = document.getElementById('lang-toggle-btn');
+const langLabel = document.getElementById('lang-label');
+const trialBadge = document.getElementById('trial-badge');
+const trialText = document.getElementById('trial-text');
+const navAdminBtn = document.getElementById('nav-btn-admin');
 
-// Direct WhatsApp elements
-const waQrSection = document.getElementById('wa-qr-section');
-const waConnectedSection = document.getElementById('wa-connected-section');
-const waConnectQrImg = document.getElementById('wa-connect-qr-img');
-const waQrLoading = document.getElementById('wa-qr-loading');
-const connectedUserPhone = document.getElementById('connected-user-phone');
-
-// Theme Management (Dark / Light Mode)
-function initTheme() {
-  const savedTheme = localStorage.getItem('theme') || 'dark';
-  applyTheme(savedTheme);
-
-  if (themeToggleBtn) {
-    themeToggleBtn.addEventListener('click', () => {
-      const current = document.documentElement.getAttribute('data-theme') || 'dark';
-      const newTheme = current === 'dark' ? 'light' : 'dark';
-      applyTheme(newTheme);
-      showToast(newTheme === 'dark' ? '🌙 Dark Mode On' : '☀️ Light Mode On');
-    });
-  }
+// -------------------------------------------------------------
+// TOAST NOTIFICATIONS & AUDIO ALARMS
+// -------------------------------------------------------------
+function showToast(msg, duration = 3000) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), duration);
 }
 
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('theme', theme);
-  if (themeIcon) {
-    themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
-  }
-}
-
-// Audio Chime
-function playChimeSound() {
+function playAlarmTone() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
@@ -71,718 +107,786 @@ function playChimeSound() {
     const gain = ctx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-    osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.1);
+    osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
+    osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2); // G5
+    osc.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.3); // C6
 
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.55);
 
     osc.connect(gain);
     gain.connect(ctx.destination);
-
     osc.start();
-    osc.stop(ctx.currentTime + 0.4);
-  } catch (e) {
-    console.log('Audio chime error:', e);
-  }
+    osc.stop(ctx.currentTime + 0.55);
+  } catch (e) {}
 }
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  initTheme();
-  setupNavigation();
-  setupVoiceInputs();
-  setDefaultDateTime();
-  loadSettings();
-  loadReminders();
-  loadNetworkInfo();
-  checkWhatsAppStatus();
+// -------------------------------------------------------------
+// LOCALIZATION (ENGLISH DEFAULT / HINDI DYNAMIC TOGGLE)
+// -------------------------------------------------------------
+function applyLanguage(lang) {
+  currentLang = lang;
+  localStorage.setItem('reminder_me_lang', lang);
+  const t = i18n[lang];
 
-  // Set default min date for end date picker to tomorrow
-  const endInput = document.getElementById('daily-end-date-input');
-  if (endInput) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    endInput.min = tomorrow.toISOString().split('T')[0];
-  }
+  langLabel.textContent = t.switchLangBtn;
+  document.getElementById('nav-lbl-create').textContent = t.create;
+  document.getElementById('nav-lbl-list').textContent = t.reminders;
+  document.getElementById('nav-lbl-plans').textContent = t.plans;
+  document.getElementById('nav-lbl-settings').textContent = t.settings;
 
-  setInterval(checkWhatsAppStatus, 3000);
-  setInterval(loadReminders, 12000);
+  document.getElementById('lbl-quick-heading').textContent = t.quick;
+  document.getElementById('lbl-custom-heading').textContent = t.custom;
+  document.getElementById('lbl-daily-heading').textContent = t.daily;
+  document.getElementById('lbl-contact-heading').textContent = t.contact;
+  document.getElementById('quick-input').placeholder = t.whatToRemember;
+
+  document.getElementById('btn-custom-save').textContent = t.saveCustom;
+  document.getElementById('btn-daily-save').textContent = t.saveDaily;
+  document.getElementById('btn-contact-save').textContent = t.saveContact;
+
+  document.getElementById('lbl-list-title').textContent = t.reminders;
+  document.getElementById('lbl-empty-title').textContent = t.noReminders;
+  document.getElementById('lbl-empty-sub').textContent = t.noRemindersSub;
+
+  document.getElementById('lbl-plan-monthly').textContent = t.monthlyPlan;
+  document.getElementById('lbl-plan-yearly').textContent = t.yearlyPlan;
+  document.getElementById('btn-enable-push').textContent = t.enablePush;
+
+  updateUserBadge();
+}
+
+langToggleBtn.addEventListener('click', () => {
+  const nextLang = currentLang === 'en' ? 'hi' : 'en';
+  applyLanguage(nextLang);
+  showToast(nextLang === 'en' ? 'Language: English' : 'भाषा: हिन्दी');
 });
 
-// Toast notification
-function showToast(message, duration = 3000) {
-  toastEl.textContent = message;
-  toastEl.classList.add('show');
-  setTimeout(() => {
-    toastEl.classList.remove('show');
-  }, duration);
-}
-
-// 3-Way Mode Switcher (Quick, Daily, Custom)
-function toggleFormMode(mode) {
-  const quickBox = document.getElementById('quick-reminder-box');
-  const dailyBox = document.getElementById('daily-reminder-box');
-  const customBox = document.getElementById('custom-reminder-box');
-  const btnQuick = document.getElementById('tab-quick-mode');
-  const btnDaily = document.getElementById('tab-daily-mode');
-  const btnCustom = document.getElementById('tab-custom-mode');
-
-  quickBox.classList.add('hidden');
-  dailyBox.classList.add('hidden');
-  customBox.classList.add('hidden');
-
-  btnQuick.classList.remove('active');
-  btnDaily.classList.remove('active');
-  btnCustom.classList.remove('active');
-
-  if (mode === 'quick') {
-    quickBox.classList.remove('hidden');
-    btnQuick.classList.add('active');
-    document.getElementById('quick-msg-input').focus();
-  } else if (mode === 'daily') {
-    dailyBox.classList.remove('hidden');
-    btnDaily.classList.add('active');
-    document.getElementById('daily-msg-input').focus();
-  } else {
-    customBox.classList.remove('hidden');
-    btnCustom.classList.add('active');
-    document.getElementById('reminder-title').focus();
-  }
-}
-
-// Daily Reminder Helpers
-function setDailyTime(timeStr) {
-  document.getElementById('daily-time-input').value = timeStr;
-  showToast(`Roz ka samay: ${timeStr} set kiya gaya`);
-}
-
-function toggleDailyEndMode(mode) {
-  currentDailyEndMode = mode;
-  const btnForever = document.getElementById('btn-end-forever');
-  const btnDate = document.getElementById('btn-end-date');
-  const dateWrapper = document.getElementById('daily-end-date-wrapper');
-
-  if (mode === 'forever') {
-    btnForever.classList.add('active');
-    btnDate.classList.remove('active');
-    dateWrapper.classList.add('hidden');
-  } else {
-    btnForever.classList.remove('active');
-    btnDate.classList.add('active');
-    dateWrapper.classList.remove('hidden');
-    document.getElementById('daily-end-date-input').focus();
-  }
-}
-
-// Set default datetime to 30 mins from now in custom form
-function setDefaultDateTime() {
-  const dateInput = document.getElementById('reminder-time');
-  const now = new Date();
-  now.setMinutes(now.getMinutes() + 30);
-  dateInput.value = formatDateTimeLocal(now);
-}
-
-function formatDateTimeLocal(date) {
-  const pad = (n) => (n < 10 ? '0' + n : n);
-  const year = date.getFullYear();
-  const month = pad(date.getMonth() + 1);
-  const day = pad(date.getDate());
-  const hours = pad(date.getHours());
-  const minutes = pad(date.getMinutes());
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-// Check WhatsApp connection status & display pre-rendered QR Image
-async function checkWhatsAppStatus() {
-  try {
-    const res = await fetch('/api/whatsapp/status');
-    const data = await res.json();
-
-    if (data.isConnected) {
-      statusText.textContent = 'WhatsApp Connected';
-      statusPill.className = 'status-pill status-connected';
-
-      waQrSection.classList.add('hidden');
-      waConnectedSection.classList.remove('hidden');
-      connectedUserPhone.textContent = data.phone ? `Sender Account: +${data.phone}` : 'Sender Account: Connected';
-    } else {
-      statusText.textContent = 'WhatsApp Scan QR';
-      statusPill.className = 'status-pill status-disconnected';
-
-      waConnectedSection.classList.add('hidden');
-      waQrSection.classList.remove('hidden');
-
-      if (data.qrImage) {
-        waQrLoading.classList.add('hidden');
-        waConnectQrImg.classList.remove('hidden');
-        if (waConnectQrImg.src !== data.qrImage) {
-          waConnectQrImg.src = data.qrImage;
-        }
-      } else {
-        waConnectQrImg.classList.add('hidden');
-        waQrLoading.classList.remove('hidden');
-      }
-    }
-  } catch (err) {
-    console.error('Error checking WhatsApp status:', err);
-  }
-}
-
-// Navigation between tabs
-function setupNavigation() {
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const viewName = item.dataset.view;
-      switchTab(viewName);
-    });
-  });
-
-  const filterTabs = document.querySelectorAll('.filter-tab');
-  filterTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      filterTabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      currentFilter = tab.dataset.filter;
-      renderReminders();
-    });
-  });
-}
-
-function switchTab(viewName) {
-  navItems.forEach(item => {
-    item.classList.toggle('active', item.dataset.view === viewName);
-  });
-
-  Object.keys(views).forEach(key => {
-    views[key].classList.toggle('active', key === viewName);
-  });
-
-  if (viewName === 'list') {
-    loadReminders();
-  }
-  if (viewName === 'settings') {
-    checkWhatsAppStatus();
-  }
-}
-
-// Voice-to-Text Input Setup
-function setupVoiceInputs() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    const qv = document.getElementById('quick-voice-btn');
-    const dv = document.getElementById('daily-voice-btn');
-    const cv = document.getElementById('voice-btn');
-    if (qv) qv.style.display = 'none';
-    if (dv) dv.style.display = 'none';
-    if (cv) cv.style.display = 'none';
+// -------------------------------------------------------------
+// NAVIGATION HANDLER
+// -------------------------------------------------------------
+function switchNav(navKey) {
+  if (!authToken && navKey !== 'auth') {
+    switchNav('auth');
     return;
   }
 
-  const recognition = new SpeechRecognition();
-  recognition.lang = 'hi-IN';
-  recognition.interimResults = false;
+  document.querySelectorAll('.nav-pill-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.nav === navKey);
+  });
 
-  let activeTargetInput = null;
-  let activeVoiceBtn = null;
+  Object.keys(views).forEach(k => {
+    views[k].classList.toggle('active', k === navKey);
+  });
 
-  function handleVoiceClick(targetInput, btn) {
-    try {
-      activeTargetInput = targetInput;
-      activeVoiceBtn = btn;
-      showToast('🎙️ Bolna shuru kijiye...');
-      btn.textContent = '🔴';
-      recognition.start();
-    } catch (e) {
-      recognition.stop();
-    }
-  }
-
-  const quickVoice = document.getElementById('quick-voice-btn');
-  const dailyVoice = document.getElementById('daily-voice-btn');
-  const customVoice = document.getElementById('voice-btn');
-
-  if (quickVoice) {
-    quickVoice.addEventListener('click', () => {
-      handleVoiceClick(document.getElementById('quick-msg-input'), quickVoice);
-    });
-  }
-
-  if (dailyVoice) {
-    dailyVoice.addEventListener('click', () => {
-      handleVoiceClick(document.getElementById('daily-msg-input'), dailyVoice);
-    });
-  }
-
-  if (customVoice) {
-    customVoice.addEventListener('click', () => {
-      handleVoiceClick(document.getElementById('reminder-title'), customVoice);
-    });
-  }
-
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    if (activeTargetInput) {
-      activeTargetInput.value = transcript;
-    }
-    showToast(`Pehchana: "${transcript}"`);
-  };
-
-  recognition.onend = () => {
-    if (activeVoiceBtn) activeVoiceBtn.textContent = '🎙️';
-  };
-
-  recognition.onerror = () => {
-    if (activeVoiceBtn) activeVoiceBtn.textContent = '🎙️';
-    showToast('Voice read nahi ho paya.');
-  };
+  if (navKey === 'list') loadReminders();
+  if (navKey === 'admin') loadAdminDashboard();
 }
 
-// ⚡ 1-CLICK QUICK REMINDER SAVE
-async function saveQuickReminder(param) {
-  const msgInput = document.getElementById('quick-msg-input');
-  const message = msgInput.value.trim();
+function switchCreateMode(mode) {
+  ['quick', 'custom', 'daily', 'contact'].forEach(m => {
+    document.getElementById(`box-mode-${m}`).classList.toggle('hidden', m !== mode);
+    document.getElementById(`tab-${m}`).classList.toggle('active', m === mode);
+  });
+}
 
-  if (!message) {
-    showToast('⚠️ Pehle yahan reminder ka message likhein!');
-    msgInput.focus();
-    return;
+// -------------------------------------------------------------
+// AUTHENTICATION & NEVER LOGOUT SESSION
+// -------------------------------------------------------------
+let authMode = 'signup';
+function switchAuthMode(mode) {
+  authMode = mode;
+  document.getElementById('btn-auth-signup').classList.toggle('active', mode === 'signup');
+  document.getElementById('btn-auth-login').classList.toggle('active', mode === 'login');
+  document.getElementById('group-fullname').style.display = mode === 'signup' ? 'block' : 'none';
+  document.getElementById('group-phone').style.display = mode === 'signup' ? 'block' : 'none';
+  document.getElementById('group-terms').style.display = mode === 'signup' ? 'block' : 'none';
+
+  document.getElementById('auth-title').textContent = mode === 'signup' ? 'Create Account' : 'Welcome Back';
+  document.getElementById('auth-submit-btn').textContent = mode === 'signup' ? 'Start 10-Day Free Trial' : 'Log In';
+}
+
+document.getElementById('auth-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value.trim();
+
+  const endpoint = authMode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+  const body = { email, password };
+
+  if (authMode === 'signup') {
+    body.fullName = document.getElementById('auth-fullname').value.trim();
+    body.phone = document.getElementById('auth-phone').value.trim();
+    body.agreedTerms = document.getElementById('auth-terms').checked;
   }
 
-  let body = {};
-  if (typeof param === 'number') {
-    body = { message, minutes: param };
-  } else if (typeof param === 'string') {
-    body = { message, preset: param };
-  } else {
-    body = { message, minutes: currentDefaultDelay };
-  }
-
-  const saveBtn = document.getElementById('quick-save-btn');
-  saveBtn.disabled = true;
+  const submitBtn = document.getElementById('auth-submit-btn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Please wait...';
 
   try {
-    const res = await fetch('/api/reminders/quick', {
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
     const data = await res.json();
 
-    if (res.ok) {
-      playChimeSound();
-      showToast(`🎉 Reminder save ho gaya! Agla reminder: ${data.scheduledTime}`);
-      msgInput.value = '';
-      loadReminders();
-      switchTab('list');
-    } else {
-      showToast('❌ Error: ' + (data.error || 'Nahi ho saka'));
-    }
-  } catch (err) {
-    showToast('❌ Error: ' + err.message);
-  } finally {
-    saveBtn.disabled = false;
-  }
-}
-
-quickReminderForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  saveQuickReminder(currentDefaultDelay);
-});
-
-// 🔁 DAILY FIX TIME REMINDER FORM SUBMIT
-dailyReminderForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-
-  const msgInput = document.getElementById('daily-msg-input');
-  const message = msgInput.value.trim();
-  const time = document.getElementById('daily-time-input').value;
-  let endDate = null;
-
-  if (currentDailyEndMode === 'date') {
-    endDate = document.getElementById('daily-end-date-input').value;
-    if (!endDate) {
-      showToast('⚠️ Kripya aakhiri tarikh (End Date) chunein!');
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Authentication failed'));
       return;
     }
-  }
 
-  if (!message) {
-    showToast('⚠️ Kripya reminder ka message likhein.');
+    // Never Logout Session: Store 365-day token in localStorage
+    authToken = data.token;
+    localStorage.setItem('reminder_me_token', authToken);
+    currentUser = data.user;
+
+    showToast('🎉 Welcome to Reminder Me!');
+    initAppSession();
+    switchNav('create');
+  } catch (err) {
+    showToast('❌ Network error: ' + err.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = authMode === 'signup' ? 'Start 10-Day Free Trial' : 'Log In';
+  }
+});
+
+async function checkSession() {
+  if (!authToken) {
+    switchNav('auth');
     return;
   }
 
-  const saveBtn = document.getElementById('save-daily-btn');
-  saveBtn.disabled = true;
+  try {
+    const res = await fetch('/api/auth/me', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    if (!res.ok) {
+      localStorage.removeItem('reminder_me_token');
+      authToken = null;
+      switchNav('auth');
+      return;
+    }
+    const data = await res.json();
+    currentUser = data.user;
+    initAppSession();
+  } catch (err) {
+    console.error('Session check error:', err);
+  }
+}
+
+function initAppSession() {
+  updateUserBadge();
+  if (currentUser && currentUser.isOwner) {
+    navAdminBtn.classList.remove('hidden');
+  } else {
+    navAdminBtn.classList.add('hidden');
+  }
+  document.getElementById('user-email-chip').textContent = currentUser.email;
+  loadReminders();
+}
+
+function updateUserBadge() {
+  if (!currentUser) return;
+  const t = i18n[currentLang];
+
+  if (currentUser.isOwner) {
+    trialText.textContent = '👑 Owner VIP';
+    trialBadge.style.background = 'rgba(15, 81, 50, 0.2)';
+    trialBadge.style.color = '#0F5132';
+  } else if (currentUser.planStatus === 'trial') {
+    trialText.textContent = t.trialDaysLeft.replace('{days}', currentUser.trialDaysLeft || 10);
+  } else {
+    trialText.textContent = `Active (${currentUser.planStatus.toUpperCase()})`;
+    trialBadge.style.background = 'rgba(15, 81, 50, 0.15)';
+    trialBadge.style.color = '#0F5132';
+  }
+}
+
+function logoutUser() {
+  if (!confirm('Are you sure you want to log out?')) return;
+  localStorage.removeItem('reminder_me_token');
+  authToken = null;
+  currentUser = null;
+  switchNav('auth');
+  showToast('Logged out');
+}
+
+async function deleteUserAccount() {
+  const confirmEmail = prompt('To permanently delete your account and all reminders, type your email address:');
+  if (!confirmEmail || confirmEmail.toLowerCase() !== currentUser.email.toLowerCase()) {
+    showToast('Action cancelled: Email did not match');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/delete-account', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    if (res.ok) {
+      localStorage.removeItem('reminder_me_token');
+      authToken = null;
+      currentUser = null;
+      switchNav('auth');
+      alert('Your account and personal data have been completely deleted.');
+    }
+  } catch (e) {
+    showToast('Failed to delete account');
+  }
+}
+
+// -------------------------------------------------------------
+// REMINDER ENGINE (QUICK, CUSTOM, DAILY, CONTACT)
+// -------------------------------------------------------------
+async function quickSave(param) {
+  const input = document.getElementById('quick-input');
+  const message = input.value.trim();
+  if (!message) {
+    showToast('Please type your reminder first!');
+    input.focus();
+    return;
+  }
+
+  const body = { message };
+  if (typeof param === 'number') body.minutes = param;
+  if (typeof param === 'string') body.preset = param;
+
+  try {
+    const res = await fetch('/api/reminders/quick', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to save'));
+      if (res.status === 403) switchNav('subscription');
+      return;
+    }
+
+    playAlarmTone();
+    showToast(`✓ Scheduled for ${data.scheduledTime}`);
+    input.value = '';
+    loadReminders();
+    switchNav('list');
+  } catch (err) {
+    showToast('❌ Error: ' + err.message);
+  }
+}
+
+// Custom Date & Time Form
+document.getElementById('form-custom').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = document.getElementById('custom-title').value.trim();
+  const message = document.getElementById('custom-note').value.trim();
+  const reminderTime = document.getElementById('custom-datetime').value;
+  const priority = document.getElementById('custom-priority').value;
+
+  try {
+    const res = await fetch('/api/reminders/custom', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ title, message, reminderTime, priority })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to save'));
+      return;
+    }
+
+    playAlarmTone();
+    showToast('✓ Custom reminder saved!');
+    document.getElementById('form-custom').reset();
+    loadReminders();
+    switchNav('list');
+  } catch (err) {
+    showToast('❌ ' + err.message);
+  }
+});
+
+// Daily Recurring Form
+document.getElementById('form-daily').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const message = document.getElementById('daily-msg').value.trim();
+  const time = document.getElementById('daily-time').value;
+  const endDate = document.getElementById('daily-enddate').value;
 
   try {
     const res = await fetch('/api/reminders/daily', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
       body: JSON.stringify({ message, time, endDate })
     });
     const data = await res.json();
-
-    if (res.ok) {
-      playChimeSound();
-      showToast(`🎉 ${data.message}`);
-      dailyReminderForm.reset();
-      document.getElementById('daily-time-input').value = '08:00';
-      toggleDailyEndMode('forever');
-      loadReminders();
-      switchTab('list');
-    } else {
-      showToast('❌ Error: ' + (data.error || 'Nahi ho saka'));
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to save'));
+      return;
     }
+
+    playAlarmTone();
+    showToast('✓ Daily recurring reminder scheduled!');
+    document.getElementById('form-daily').reset();
+    loadReminders();
+    switchNav('list');
   } catch (err) {
-    showToast('❌ Error: ' + err.message);
-  } finally {
-    saveBtn.disabled = false;
+    showToast('❌ ' + err.message);
   }
 });
 
-// 🛠️ CUSTOM DETAILED REMINDER FORM SUBMIT
-customReminderForm.addEventListener('submit', async (e) => {
+// Remind Contact Form
+document.getElementById('form-contact').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const contactName = document.getElementById('contact-name').value.trim();
+  const contactPhone = document.getElementById('contact-phone').value.trim();
+  const message = document.getElementById('contact-msg').value.trim();
+  const reminderTime = document.getElementById('contact-datetime').value;
 
-  const title = document.getElementById('reminder-title').value.trim();
-  const message = document.getElementById('reminder-msg').value.trim();
-  const category = document.getElementById('reminder-category').value;
-  const priority = document.getElementById('reminder-priority').value;
-  const reminderTime = document.getElementById('reminder-time').value;
+  try {
+    const res = await fetch('/api/reminders/contact', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ contactName, contactPhone, message, reminderTime })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to save'));
+      return;
+    }
 
-  if (!title) {
-    showToast('⚠️ Kripya reminder title bharein.');
-    return;
+    playAlarmTone();
+    showToast(`✓ Reminder scheduled for ${contactName}!`);
+    document.getElementById('form-contact').reset();
+    loadReminders();
+    switchNav('list');
+  } catch (err) {
+    showToast('❌ ' + err.message);
   }
-  if (!reminderTime) {
-    showToast('⚠️ Kripya date & time chunein.');
-    return;
-  }
+});
 
-  const saveBtn = document.getElementById('save-reminder-btn');
-  saveBtn.disabled = true;
-
+// Load Reminders List
+async function loadReminders() {
+  if (!authToken) return;
   try {
     const res = await fetch('/api/reminders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title,
-        message: message || title,
-        category,
-        priority,
-        reminderTime: new Date(reminderTime).toISOString()
-      })
+      headers: { Authorization: `Bearer ${authToken}` }
     });
-
-    const data = await res.json();
-    if (res.ok) {
-      playChimeSound();
-      showToast('🎉 Reminder save ho gaya!');
-      customReminderForm.reset();
-      setDefaultDateTime();
-      switchTab('list');
-      loadReminders();
-    } else {
-      showToast('❌ Error: ' + (data.error || 'Nahi ho saka'));
-    }
-  } catch (err) {
-    showToast('❌ Network error: ' + err.message);
-  } finally {
-    saveBtn.disabled = false;
-  }
-});
-
-// Load Settings
-async function loadSettings() {
-  try {
-    const res = await fetch('/api/settings');
-    const data = await res.json();
-
-    if (data.recipientPhone) {
-      document.getElementById('settings-recipient').value = data.recipientPhone;
-    }
-    if (data.defaultDelayMinutes) {
-      currentDefaultDelay = data.defaultDelayMinutes;
-      document.getElementById('settings-default-delay').value = data.defaultDelayMinutes;
-      const btnTime = document.getElementById('btn-default-time');
-      if (btnTime) btnTime.textContent = `${data.defaultDelayMinutes} Min`;
-    }
-    if (data.defaultPriority) {
-      document.getElementById('settings-default-priority').value = data.defaultPriority;
-    }
-  } catch (err) {
-    console.error('Error loading settings:', err);
-  }
-}
-
-// Save Settings Form
-settingsForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const recipientPhone = document.getElementById('settings-recipient').value.trim();
-  const defaultDelayMinutes = document.getElementById('settings-default-delay').value;
-  const defaultPriority = document.getElementById('settings-default-priority').value;
-
-  try {
-    const res = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        recipientPhone,
-        defaultDelayMinutes,
-        defaultPriority
-      })
-    });
-    if (res.ok) {
-      currentDefaultDelay = parseInt(defaultDelayMinutes, 10);
-      const btnTime = document.getElementById('btn-default-time');
-      if (btnTime) btnTime.textContent = `${currentDefaultDelay} Min`;
-      playChimeSound();
-      showToast('✅ Settings save ho gayi!');
-    }
-  } catch (err) {
-    showToast('❌ Error: ' + err.message);
-  }
-});
-
-// Test WhatsApp Button
-testWaBtn.addEventListener('click', async () => {
-  testWaBtn.disabled = true;
-  testWaBtn.textContent = 'Bheja ja raha hai...';
-
-  try {
-    const res = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ testNow: true })
-    });
-    const data = await res.json();
-
-    if (res.ok) {
-      playChimeSound();
-      showToast('🎉 WhatsApp par test message bhej diya gaya! Check karein.');
-    } else {
-      showToast('❌ ' + (data.error || 'Nahi bhej paye'));
-    }
-  } catch (err) {
-    showToast('❌ Error: ' + err.message);
-  } finally {
-    testWaBtn.disabled = false;
-    testWaBtn.textContent = '📲 WhatsApp Par Test Message Bhejo';
-  }
-});
-
-// Disconnect WhatsApp
-if (disconnectWaBtn) {
-  disconnectWaBtn.addEventListener('click', async () => {
-    if (!confirm('Kya aap WhatsApp logout karna chahte hain?')) return;
-    try {
-      showToast('Disconnecting...');
-      await fetch('/api/whatsapp/logout', { method: 'POST' });
-      showToast('Disconnected. Naya QR scan karein.');
-      checkWhatsAppStatus();
-    } catch (err) {
-      showToast('Error: ' + err.message);
-    }
-  });
-}
-
-// Load Reminders
-async function loadReminders() {
-  try {
-    const res = await fetch('/api/reminders');
     currentReminders = await res.json();
-    updateCounts();
     renderReminders();
   } catch (err) {
-    console.error('Error loading reminders:', err);
+    console.error('Error fetching reminders:', err);
   }
 }
 
-function updateCounts() {
-  const allCount = currentReminders.length;
-  const pendingCount = currentReminders.filter(r => r.status === 'pending' && r.repeat !== 'daily').length;
-  const dailyCount = currentReminders.filter(r => r.repeat === 'daily' && r.status === 'pending').length;
-  const sentCount = currentReminders.filter(r => r.status === 'sent' || r.status === 'completed').length;
-
-  document.getElementById('count-all').textContent = allCount;
-  document.getElementById('count-pending').textContent = pendingCount;
-  document.getElementById('count-daily').textContent = dailyCount;
-  document.getElementById('count-sent').textContent = sentCount;
-}
-
-// Render Reminders
 function renderReminders() {
-  let list = currentReminders;
-  if (currentFilter === 'pending') {
-    list = list.filter(r => r.status === 'pending' && r.repeat !== 'daily');
-  } else if (currentFilter === 'daily') {
-    list = list.filter(r => r.repeat === 'daily');
-  } else if (currentFilter === 'sent') {
-    list = list.filter(r => r.status === 'sent' || r.status === 'completed');
-  }
+  const container = document.getElementById('reminders-container');
+  const emptyState = document.getElementById('list-empty-state');
+  const countBadge = document.getElementById('reminders-count');
 
-  if (list.length === 0) {
-    remindersContainer.innerHTML = '';
+  countBadge.textContent = `${currentReminders.length} Active`;
+
+  if (currentReminders.length === 0) {
+    container.innerHTML = '';
     emptyState.classList.remove('hidden');
     return;
   }
 
   emptyState.classList.add('hidden');
-  remindersContainer.innerHTML = list.map(item => {
-    const remDate = new Date(item.reminderTime);
-    const dateFormatted = remDate.toLocaleString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
+  container.innerHTML = currentReminders.map(r => {
+    const d = new Date(r.reminderTime);
+    const timeFormatted = d.toLocaleString(currentLang === 'hi' ? 'hi-IN' : 'en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 
-    const isDaily = item.repeat === 'daily';
-    const isPending = item.status === 'pending';
-    const isSent = item.status === 'sent';
-    const isCompleted = item.status === 'completed';
-
-    const categoryIcons = {
-      personal: '👤 Personal',
-      work: '💼 Work',
-      health: '💊 Health',
-      bill: '💰 Bill',
-      other: '📌 Other'
-    };
-
-    let statusBadgeHtml = '';
-    if (isDaily && isPending) {
-      statusBadgeHtml = `<span class="tag tag-daily">🔁 Rozana (${item.repeatTime || 'Fix Time'})</span>`;
-    } else if (isPending) {
-      statusBadgeHtml = `<span class="tag tag-status-pending">⏳ Scheduled</span>`;
-    } else if (isCompleted) {
-      statusBadgeHtml = `<span class="tag tag-status-completed">🏁 Completed</span>`;
-    } else if (isSent) {
-      statusBadgeHtml = `<span class="tag tag-status-sent">✅ WhatsApp Sent</span>`;
-    } else {
-      statusBadgeHtml = `<span class="tag tag-status-failed">❌ Failed</span>`;
-    }
-
-    const sentCountBadge = isDaily && item.sentCount > 0 ? `<span class="tag tag-category">Sent: ${item.sentCount} bar</span>` : '';
-    const endBadge = item.endDate ? `<span class="tag tag-category">📅 End: ${new Date(item.endDate).toLocaleDateString('en-IN')}</span>` : '';
+    const isDaily = r.repeat === 'daily';
+    const contactBadge = r.targetContactName ? `<span class="pill-tag" style="background:rgba(249,115,22,0.12); color:#F97316;">To: ${r.targetContactName}</span>` : '';
+    const dailyBadge = isDaily ? `<span class="pill-tag" style="background:rgba(139,92,246,0.12); color:#7C3AED;">🔁 Daily (${r.repeatTime})</span>` : '';
 
     return `
-      <div class="reminder-card" data-id="${item.id}">
-        <div class="reminder-top">
-          <div class="reminder-info">
-            <div class="reminder-title">${escapeHtml(item.title)}</div>
-            ${item.message && item.message !== item.title ? `<div class="reminder-details">${escapeHtml(item.message)}</div>` : ''}
-            <div class="reminder-tags">
-              ${statusBadgeHtml}
-              ${sentCountBadge}
-              ${endBadge}
-              <span class="tag tag-priority-${item.priority}">${(item.priority || 'NORMAL').toUpperCase()}</span>
-            </div>
+      <div class="reminder-item">
+        <div class="reminder-header-row">
+          <div>
+            <div class="reminder-text">${escapeHtml(r.title)}</div>
+            ${r.message && r.message !== r.title ? `<p style="font-size:12px; color:var(--text-muted); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
+          </div>
+          <div style="display:flex; gap:4px;">
+            ${dailyBadge}
+            ${contactBadge}
           </div>
         </div>
 
-        <div class="reminder-time-box">
-          <span>${isDaily ? '🕒 Agla Reminder:' : '🕒 Reminder Time:'}</span>
-          <strong>${dateFormatted}</strong>
-        </div>
-
-        <div class="reminder-actions">
-          <button class="action-btn-sm btn-send-now" onclick="triggerReminderNow('${item.id}')" title="Send now to WhatsApp">
-            📲 Abhi Bhejo
-          </button>
-          <button class="action-btn-sm btn-danger" onclick="deleteReminder('${item.id}')" title="Delete">
-            🗑️ Delete
-          </button>
+        <div class="reminder-meta-row">
+          <div class="reminder-time-chip">⏰ ${timeFormatted}</div>
+          <div class="reminder-actions-btns">
+            <button class="mini-btn mini-send" onclick="triggerReminderNow('${r.id}')" title="Test Send">📲 Send</button>
+            <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')" title="Delete">🗑️</button>
+          </div>
         </div>
       </div>
     `;
   }).join('');
 }
 
-// Trigger Reminder Now
 async function triggerReminderNow(id) {
   try {
-    showToast('📲 WhatsApp par bhej rahe hain...');
+    showToast('Sending WhatsApp & Push...');
     const res = await fetch(`/api/reminders/${id}/trigger`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
     });
     const data = await res.json();
-
     if (res.ok) {
-      playChimeSound();
-      showToast('✅ WhatsApp reminder bhej diya gaya!');
-      loadReminders();
+      playAlarmTone();
+      showToast('✓ Alert dispatched!');
     } else {
-      showToast('❌ Error: ' + (data.error || 'Failed to send'));
+      showToast('❌ ' + (data.error || 'Failed'));
     }
-  } catch (err) {
-    showToast('❌ Error: ' + err.message);
+  } catch (e) {
+    showToast('Error sending reminder');
   }
 }
 
-// Delete Reminder
 async function deleteReminder(id) {
-  if (!confirm('Kya aap ye reminder delete karna chahte hain?')) return;
-
   try {
     const res = await fetch(`/api/reminders/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` }
     });
     if (res.ok) {
-      showToast('🗑️ Reminder delete ho gaya');
+      showToast('Deleted');
       loadReminders();
-    } else {
-      showToast('❌ Delete nahi ho saka');
     }
-  } catch (err) {
-    showToast('❌ Error: ' + err.message);
+  } catch (e) {
+    showToast('Error deleting reminder');
   }
 }
 
-// Load Network IP & Render QR
-async function loadNetworkInfo() {
+// -------------------------------------------------------------
+// SUBSCRIPTION & RAZORPAY AUTOPAY
+// -------------------------------------------------------------
+function selectPlan(plan) {
+  selectedPlan = plan;
+  document.getElementById('card-plan-monthly').classList.toggle('selected', plan === 'monthly');
+  document.getElementById('card-plan-yearly').classList.toggle('selected', plan === 'yearly');
+}
+
+async function startRazorpayAutopay() {
   try {
-    const res = await fetch('/api/network-info');
+    showToast('Initializing Autopay...');
+    const res = await fetch('/api/subscription/create-autopay', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ planType: selectedPlan })
+    });
     const data = await res.json();
 
-    mobileUrl = data.mobileUrl;
-    document.getElementById('mobile-url-display').textContent = mobileUrl;
-    document.getElementById('modal-url-text').textContent = mobileUrl;
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to start payment'));
+      return;
+    }
 
-    if (data.mobileUrlQR) {
-      const mobileQrImg = document.getElementById('mobile-qr-img');
-      const modalQrImg = document.getElementById('modal-qr-img');
-      if (mobileQrImg) mobileQrImg.src = data.mobileUrlQR;
-      if (modalQrImg) modalQrImg.src = data.mobileUrlQR;
+    const options = {
+      key: data.keyId,
+      amount: data.amountPaise,
+      currency: data.currency,
+      name: 'Reminder Me',
+      description: data.description,
+      image: '/icons/icon.svg',
+      handler: async function (response) {
+        showToast('Verifying payment...');
+        const verifyRes = await fetch('/api/subscription/verify-autopay', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            planType: selectedPlan,
+            paymentId: response.razorpay_payment_id,
+            subscriptionId: response.razorpay_subscription_id
+          })
+        });
+        const verifyData = await verifyRes.json();
+        if (verifyRes.ok) {
+          playAlarmTone();
+          showToast('🎉 ' + verifyData.message);
+          checkSession();
+        } else {
+          showToast('Verification failed');
+        }
+      },
+      prefill: {
+        name: currentUser.fullName,
+        email: currentUser.email,
+        contact: currentUser.phone
+      },
+      theme: { color: '#0F5132' }
+    };
+
+    // Open Razorpay Modal
+    if (typeof Razorpay !== 'undefined') {
+      const rzp = new Razorpay(options);
+      rzp.open();
+    } else {
+      // In sandbox/testing mode if razorpay script not loaded:
+      const mockPayId = 'pay_' + Date.now();
+      const verifyRes = await fetch('/api/subscription/verify-autopay', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ planType: selectedPlan, paymentId: mockPayId })
+      });
+      showToast('✓ Autopay subscription activated (Simulated)');
+      checkSession();
     }
   } catch (err) {
-    console.error('Error fetching network info:', err);
+    showToast('❌ ' + err.message);
   }
 }
 
-// QR Modal toggling
-if (qrBtn) {
-  qrBtn.addEventListener('click', () => {
-    qrModal.classList.remove('hidden');
+async function applyCouponCode() {
+  const code = document.getElementById('coupon-input').value.trim();
+  if (!code) {
+    showToast('Please enter a coupon code');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/subscription/apply-coupon', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      playAlarmTone();
+      showToast('🎉 ' + data.message);
+      document.getElementById('coupon-input').value = '';
+      checkSession();
+    } else {
+      showToast('❌ ' + (data.error || 'Invalid coupon'));
+    }
+  } catch (e) {
+    showToast('Coupon application error');
+  }
+}
+
+// -------------------------------------------------------------
+// WEB PUSH NOTIFICATIONS
+// -------------------------------------------------------------
+async function enablePushNotifications() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    showToast('Push notifications not supported on this device');
+    return;
+  }
+
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      showToast('Notification permission denied');
+      return;
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    const vapidRes = await fetch('/api/push/vapid-key');
+    const { publicKey } = await vapidRes.json();
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlB64ToUint8Array(publicKey)
+    });
+
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ subscription: sub })
+    });
+
+    playAlarmTone();
+    showToast('🔔 Lock-screen notifications enabled!');
+  } catch (err) {
+    showToast('Push setup error: ' + err.message);
+  }
+}
+
+function urlB64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+// -------------------------------------------------------------
+// EXCLUSIVE OWNER ADMIN PANEL
+// -------------------------------------------------------------
+async function loadAdminDashboard() {
+  if (!currentUser || !currentUser.isOwner) return;
+
+  try {
+    const res = await fetch('/api/admin/stats', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const data = await res.json();
+    if (!res.ok) return;
+
+    document.getElementById('stat-total-users').textContent = data.stats.totalUsers;
+    document.getElementById('stat-active-trials').textContent = data.stats.activeTrials;
+    document.getElementById('stat-autopay-users').textContent = data.stats.activeAutopay;
+    document.getElementById('stat-revenue').textContent = `₹${data.stats.totalRevenue}`;
+
+    const tbody = document.getElementById('admin-users-tbody');
+    tbody.innerHTML = data.users.map(u => `
+      <tr>
+        <td><strong>${escapeHtml(u.fullName)}</strong></td>
+        <td>${escapeHtml(u.email)}</td>
+        <td>${escapeHtml(u.phone)}</td>
+        <td><span class="pill-tag" style="font-size:10px;">${u.planStatus.toUpperCase()}</span></td>
+        <td>${u.subscriptionExpiresAt ? new Date(u.subscriptionExpiresAt).toLocaleDateString() : (u.isOwner ? 'VIP Lifetime' : '10-Day Trial')}</td>
+      </tr>
+    `).join('');
+
+    checkAdminWhatsAppStatus();
+  } catch (err) {
+    console.error('Admin dashboard error:', err);
+  }
+}
+
+async function checkAdminWhatsAppStatus() {
+  try {
+    const res = await fetch('/api/whatsapp/status');
+    const data = await res.json();
+    const statusText = document.getElementById('admin-wa-status');
+    const qrImg = document.getElementById('admin-wa-qr');
+
+    if (data.isConnected) {
+      statusText.innerHTML = `🟢 <strong>Connected as:</strong> +${data.phone}`;
+      qrImg.style.display = 'none';
+    } else {
+      statusText.innerHTML = '⚠️ <strong>WhatsApp Disconnected.</strong> Scan QR below:';
+      if (data.qrImage) {
+        qrImg.src = data.qrImage;
+        qrImg.style.display = 'block';
+      }
+    }
+  } catch (e) {}
+}
+
+async function generateAdminCoupons() {
+  const planType = document.getElementById('admin-coupon-type').value;
+  try {
+    const res = await fetch('/api/admin/coupons/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ planType, count: 3 })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      document.getElementById('admin-generated-codes').innerHTML =
+        '<strong>New Codes:</strong><br>' + data.createdCodes.join('<br>');
+      showToast('Generated 3 single-use coupons');
+    }
+  } catch (e) {
+    showToast('Error generating coupons');
+  }
+}
+
+function exportAdminDataCSV() {
+  fetch('/api/admin/stats', {
+    headers: { Authorization: `Bearer ${authToken}` }
+  })
+  .then(res => res.json())
+  .then(data => {
+    let csv = 'ID,Full Name,Email,Phone,Plan Status,Trial Ends,Subscription Expires,Created At\n';
+    data.users.forEach(u => {
+      csv += `"${u.id}","${u.fullName}","${u.email}","${u.phone}","${u.planStatus}","${u.trialEndsAt}","${u.subscriptionExpiresAt || ''}","${u.createdAt}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `reminder_me_users_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    showToast('✓ CSV exported successfully!');
   });
 }
 
-function closeQRModal() {
-  qrModal.classList.add('hidden');
+// -------------------------------------------------------------
+// SHARE APP & VOICE MIC HELPER
+// -------------------------------------------------------------
+function shareReminderMeApp() {
+  const shareData = {
+    title: 'Reminder Me',
+    text: 'Try Reminder Me - Get automated task & medicine reminders directly on your WhatsApp and Lock Screen!',
+    url: window.location.origin
+  };
+
+  if (navigator.share) {
+    navigator.share(shareData).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(window.location.origin).then(() => {
+      showToast('📋 App link copied to clipboard!');
+    });
+  }
 }
 
-function copyMobileUrl() {
-  copyText(mobileUrl);
-}
+document.getElementById('share-app-btn').addEventListener('click', shareReminderMeApp);
 
-function copyText(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('📋 Copied: ' + text);
-  }).catch(() => {
-    showToast('Copied: ' + text);
+// Voice Mic recognition setup
+const quickMic = document.getElementById('quick-mic-btn');
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechRecognition && quickMic) {
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+
+  quickMic.addEventListener('click', () => {
+    try {
+      showToast('🎙️ Listening...');
+      quickMic.textContent = '🔴';
+      recognition.start();
+    } catch (e) {
+      recognition.stop();
+    }
   });
+
+  recognition.onresult = (e) => {
+    document.getElementById('quick-input').value = e.results[0][0].transcript;
+    quickMic.textContent = '🎙️';
+  };
+  recognition.onend = () => { quickMic.textContent = '🎙️'; };
+  recognition.onerror = () => { quickMic.textContent = '🎙️'; };
 }
 
 function escapeHtml(str) {
@@ -790,11 +894,23 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Service worker registration
+// Register PWA Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => {
-      console.log('SW registration failed:', err);
-    });
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration error:', err));
   });
 }
+
+// Default DateTime for custom inputs
+const now = new Date();
+now.setMinutes(now.getMinutes() + 30);
+const pad = n => n < 10 ? '0' + n : n;
+const defaultDT = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+const customDT = document.getElementById('custom-datetime');
+if (customDT) customDT.value = defaultDT;
+const contactDT = document.getElementById('contact-datetime');
+if (contactDT) contactDT.value = defaultDT;
+
+// Start session
+applyLanguage(currentLang);
+checkSession();

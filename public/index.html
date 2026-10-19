@@ -1,375 +1,464 @@
 <!DOCTYPE html>
-<html lang="hi" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0B1120">
+  <meta name="theme-color" content="#F4EFEA">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>WhatsApp Reminder App</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Reminder Me - Smart Reminder App</title>
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- Ambient Soft Blobs -->
+  <div class="ambient-blob-1"></div>
+  <div class="ambient-blob-2"></div>
+
   <div class="app-container">
 
-    <!-- Top Navigation Header -->
+    <!-- Top Header -->
     <header class="app-header">
       <div class="header-inner">
         <div class="brand">
-          <div class="brand-avatar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+          <div class="brand-logo-disc">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
           </div>
           <div>
-            <h1 class="brand-title">Reminder Bot</h1>
-            <div id="status-pill" class="status-pill status-disconnected">
-              <span class="status-dot"></span>
-              <span id="status-text">WhatsApp Scan QR</span>
+            <h1 class="brand-name">Reminder Me</h1>
+            <div id="trial-badge" class="trial-badge">
+              <span id="trial-text">10-Day Free Trial</span>
             </div>
           </div>
         </div>
 
-        <div class="header-actions">
-          <!-- Dark / Light Mode Switcher -->
-          <button id="theme-toggle-btn" class="header-icon-btn" title="Toggle Dark/Light Mode" aria-label="Toggle Theme">
-            <span id="theme-icon">☀️</span>
+        <div class="header-controls">
+          <!-- Dynamic Language Switcher (English default / Hindi) -->
+          <button id="lang-toggle-btn" class="lang-switch-btn" title="Switch Language">
+            <span id="lang-label">हिन्दी</span>
           </button>
-          <!-- Mobile QR -->
-          <button id="qr-btn" class="header-icon-btn" title="Open on Mobile" aria-label="Mobile QR">
+          <!-- Share App Button -->
+          <button id="share-app-btn" class="header-icon-btn" title="Share App">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
-              <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
-              <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
-              <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
             </svg>
           </button>
         </div>
       </div>
     </header>
 
-    <!-- App Main Views -->
+    <!-- Main Content Area -->
     <main class="app-main">
 
-      <!-- View 1: New Reminder (Modes: Quick, Rozana Daily, Custom) -->
-      <section id="view-add" class="view active">
+      <!-- ============================================== -->
+      <!-- VIEW: AUTH / SIGNUP & LOGIN MODAL OVERLAY -->
+      <!-- ============================================== -->
+      <section id="view-auth" class="view">
+        <div class="card-glass">
+          <div class="card-title-row">
+            <h2 id="auth-title">Create Account</h2>
+            <span class="pill-tag" id="auth-tag">10 Days Free</span>
+          </div>
+
+          <!-- Auth Mode Toggle -->
+          <div class="mode-segmented-bar mb-3">
+            <button type="button" class="mode-tab-btn active" id="btn-auth-signup" onclick="switchAuthMode('signup')">Sign Up</button>
+            <button type="button" class="mode-tab-btn" id="btn-auth-login" onclick="switchAuthMode('login')">Log In</button>
+          </div>
+
+          <form id="auth-form">
+            <!-- Full Name (Signup only) -->
+            <div class="form-group" id="group-fullname">
+              <label id="lbl-fullname">Full Name</label>
+              <input type="text" id="auth-fullname" class="input-glass" placeholder="John Doe">
+            </div>
+
+            <!-- Mobile Phone (Signup only) -->
+            <div class="form-group" id="group-phone">
+              <label id="lbl-phone">Mobile Number (WhatsApp)</label>
+              <input type="tel" id="auth-phone" class="input-glass" placeholder="+91 98765 43210">
+            </div>
+
+            <!-- Email -->
+            <div class="form-group">
+              <label id="lbl-email">Email Address</label>
+              <input type="email" id="auth-email" class="input-glass" placeholder="you@example.com" required>
+            </div>
+
+            <!-- Password -->
+            <div class="form-group">
+              <label id="lbl-password">App Password</label>
+              <input type="password" id="auth-password" class="input-glass" placeholder="••••••••" required>
+            </div>
+
+            <!-- DPDP Compliance Agreement (Signup only) -->
+            <div class="form-group" id="group-terms">
+              <label style="display:flex; align-items:flex-start; gap:8px; font-size:11px; text-transform:none; font-weight:500;">
+                <input type="checkbox" id="auth-terms" checked required style="margin-top:2px;">
+                <span id="terms-text">I agree to the Privacy Policy, Terms of Service & Auto-Renewal Policy (10-Day Free Trial, ₹20.50/mo or ₹154/yr).</span>
+              </label>
+            </div>
+
+            <button type="submit" class="btn-pill btn-forest mt-2" id="auth-submit-btn">
+              Start 10-Day Free Trial
+            </button>
+          </form>
+
+          <p class="mt-3 text-center" style="font-size:12px; color:var(--text-muted);">
+            Official Support: <a href="mailto:supportrememberme@gmail.com" style="color:var(--forest-green); font-weight:600;">supportrememberme@gmail.com</a>
+          </p>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- VIEW: CREATE REMINDERS (4 MODES) -->
+      <!-- ============================================== -->
+      <section id="view-create" class="view active">
         
-        <!-- 3-Way Mode Switcher -->
-        <div class="mode-switcher-three">
-          <button type="button" class="mode-btn active" id="tab-quick-mode" onclick="toggleFormMode('quick')">
-            ⚡ Quick
-          </button>
-          <button type="button" class="mode-btn" id="tab-daily-mode" onclick="toggleFormMode('daily')">
-            🔁 Rozana (Daily)
-          </button>
-          <button type="button" class="mode-btn" id="tab-custom-mode" onclick="toggleFormMode('custom')">
-            🛠️ Custom
+        <!-- 4-Mode Segmented Selector -->
+        <div class="mode-segmented-bar">
+          <button type="button" class="mode-tab-btn active" id="tab-quick" onclick="switchCreateMode('quick')">⚡ Quick</button>
+          <button type="button" class="mode-tab-btn" id="tab-custom" onclick="switchCreateMode('custom')">🛠️ Custom</button>
+          <button type="button" class="mode-tab-btn" id="tab-daily" onclick="switchCreateMode('daily')">🔁 Daily</button>
+          <button type="button" class="mode-tab-btn" id="tab-contact" onclick="switchCreateMode('contact')">👥 Contact</button>
+        </div>
+
+        <!-- 1. Quick Tap Mode -->
+        <div id="box-mode-quick" class="card-glass">
+          <div class="card-title-row">
+            <h2 id="lbl-quick-heading">Quick Reminder</h2>
+            <span class="pill-tag">1-Tap Save</span>
+          </div>
+
+          <div class="input-with-btn">
+            <textarea id="quick-input" class="input-glass textarea-glass" rows="3" placeholder="What do you want to remember?" autofocus></textarea>
+            <button type="button" id="quick-mic-btn" class="floating-mic" title="Voice Input">🎙️</button>
+          </div>
+
+          <div class="time-pills-wrap">
+            <button type="button" class="time-pill-btn pill-highlight" onclick="quickSave(5)">+5 Min</button>
+            <button type="button" class="time-pill-btn pill-highlight" onclick="quickSave(10)">+10 Min</button>
+            <button type="button" class="time-pill-btn pill-highlight" onclick="quickSave(15)">+15 Min</button>
+            <button type="button" class="time-pill-btn" onclick="quickSave(30)">+30 Min</button>
+            <button type="button" class="time-pill-btn" onclick="quickSave(60)">+1 Hour</button>
+            <button type="button" class="time-pill-btn" onclick="quickSave(180)">+3 Hours</button>
+            <button type="button" class="time-pill-btn" onclick="quickSave('tonight-9pm')">🌙 Tonight 9 PM</button>
+            <button type="button" class="time-pill-btn" onclick="quickSave('tomorrow-8am')">☀️ Tomorrow 8 AM</button>
+            <button type="button" class="time-pill-btn" onclick="quickSave('tomorrow-6pm')">🌆 Tomorrow 6 PM</button>
+          </div>
+
+          <button type="button" class="btn-pill btn-forest" onclick="quickSave(15)">
+            <span id="btn-quick-default">Save (15 Min Default)</span>
           </button>
         </div>
 
-        <!-- ⚡ 1. QUICK 1-TAP REMINDER CARD -->
-        <div id="quick-reminder-box" class="card card-elevated">
-          <div class="card-caption">
-            <span class="badge-spark">⚡ 1-Tap Fast Save</span>
-            <h2>Bas Message Likhein</h2>
-            <p>Niche kisi bhi time par tap karein aur turant save!</p>
+        <!-- 2. Custom Date & Time Mode -->
+        <div id="box-mode-custom" class="card-glass hidden">
+          <div class="card-title-row">
+            <h2 id="lbl-custom-heading">Custom Reminder</h2>
+            <span class="pill-tag">Exact Date</span>
           </div>
 
-          <form id="quick-reminder-form">
-            <div class="quick-input-wrapper">
-              <textarea id="quick-msg-input" rows="3" placeholder="Yahan reminder likhein... (Jaise: Dawa khani hai, Meeting hai, Bill bharna hai)" required></textarea>
-              <button type="button" id="quick-voice-btn" class="floating-voice-btn" title="Bolkar likhein">
-                🎙️
-              </button>
-            </div>
-
-            <!-- Quick Pill Grid (Expanded Times) -->
-            <div class="quick-actions-bar">
-              <span class="section-label">⏱️ Minute / Ghante ke hisab se:</span>
-              <div class="quick-pill-grid cols-3">
-                <button type="button" class="quick-pill" onclick="saveQuickReminder(5)">+5 Min</button>
-                <button type="button" class="quick-pill primary-pill" onclick="saveQuickReminder(10)">+10 Min</button>
-                <button type="button" class="quick-pill primary-pill" onclick="saveQuickReminder(15)">+15 Min</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder(30)">+30 Min</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder(45)">+45 Min</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder(60)">+1 Ghanta</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder(120)">+2 Ghante</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder(180)">+3 Ghante</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder(360)">+6 Ghante</button>
-              </div>
-
-              <span class="section-label mt-3">📅 Fix Timings:</span>
-              <div class="quick-pill-grid cols-2">
-                <button type="button" class="quick-pill" onclick="saveQuickReminder('tonight-9pm')">🌙 Aaj Raat 9 PM</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder('tomorrow-8am')">☀️ Kal Subah 8 AM</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder('tomorrow-10am')">🏢 Kal Subah 10 AM</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder('tomorrow-6pm')">🌆 Kal Shaam 6 PM</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder('in-2-days')">🗓️ 2 Din Baad</button>
-                <button type="button" class="quick-pill" onclick="saveQuickReminder('next-monday')">📅 Agla Somwar</button>
-              </div>
-            </div>
-
-            <button type="submit" class="btn btn-emerald btn-block mt-3" id="quick-save-btn">
-              Default Time (<span id="btn-default-time">15 Min</span>) Me Save Karein
-            </button>
-          </form>
-        </div>
-
-        <!-- 🔁 2. DAILY FIX TIME (ROZANA) REMINDER CARD -->
-        <div id="daily-reminder-box" class="card card-elevated hidden">
-          <div class="card-caption">
-            <span class="badge-spark badge-purple">🔁 Rozana Fix Time Reminder</span>
-            <h2>Daily Schedule Banayein</h2>
-            <p>Ye message aapko roz ek nishchit samay par aayega</p>
-          </div>
-
-          <form id="daily-reminder-form">
+          <form id="form-custom">
             <div class="form-group">
-              <label>Reminder Ka Message <span class="req">*</span></label>
-              <div class="input-with-action">
-                <input type="text" id="daily-msg-input" placeholder="Jaise: Subah ki dawa leni hai, Exercise, Daily update" required>
-                <button type="button" id="daily-voice-btn" class="voice-btn" title="Bolkar likhein">🎙️</button>
-              </div>
-            </div>
-
-            <!-- Daily Fix Time Picker -->
-            <div class="form-group">
-              <label>Roz Kis Samay Aaye? <span class="req">*</span></label>
-              <input type="time" id="daily-time-input" value="08:00" required>
-              <div class="quick-pill-grid cols-3 mt-2">
-                <button type="button" class="quick-pill" onclick="setDailyTime('08:00')">Subah 8 AM</button>
-                <button type="button" class="quick-pill" onclick="setDailyTime('10:00')">Subah 10 AM</button>
-                <button type="button" class="quick-pill" onclick="setDailyTime('14:00')">Dopahar 2 PM</button>
-                <button type="button" class="quick-pill" onclick="setDailyTime('18:00')">Shaam 6 PM</button>
-                <button type="button" class="quick-pill" onclick="setDailyTime('21:00')">Raat 9 PM</button>
-                <button type="button" class="quick-pill" onclick="setDailyTime('22:00')">Raat 10 PM</button>
-              </div>
-            </div>
-
-            <!-- End Date Option -->
-            <div class="form-group">
-              <label>Kab Tak Chalna Chahiye?</label>
-              <div class="segmented-mini">
-                <button type="button" class="seg-btn active" id="btn-end-forever" onclick="toggleDailyEndMode('forever')">Hamesha (Roz)</button>
-                <button type="button" class="seg-btn" id="btn-end-date" onclick="toggleDailyEndMode('date')">Fix Date Tak</button>
-              </div>
-              <div id="daily-end-date-wrapper" class="mt-2 hidden">
-                <label class="sub-label">Aakhiri Tarikh (End Date):</label>
-                <input type="date" id="daily-end-date-input">
-                <small class="helper-text">Is tarikh ke baad ye reminder apne aap band ho jayega.</small>
-              </div>
-            </div>
-
-            <button type="submit" class="btn btn-emerald btn-block mt-3" id="save-daily-btn">
-              🔁 Rozana Reminder Set Karein
-            </button>
-          </form>
-        </div>
-
-        <!-- 🛠️ 3. CUSTOM DETAILED REMINDER CARD -->
-        <div id="custom-reminder-box" class="card card-elevated hidden">
-          <div class="card-caption">
-            <h2>Detailed Reminder</h2>
-            <p>Apni marzi se specific Date, Time & Priority chunein</p>
-          </div>
-
-          <form id="reminder-form">
-            <div class="form-group">
-              <label>Reminder Title <span class="req">*</span></label>
-              <div class="input-with-action">
-                <input type="text" id="reminder-title" placeholder="Jaise: Dawa khani hai">
-                <button type="button" id="voice-btn" class="voice-btn" title="Speak message">🎙️</button>
-              </div>
+              <label id="lbl-custom-title">Title / Task</label>
+              <input type="text" id="custom-title" class="input-glass" placeholder="Doctor appointment" required>
             </div>
 
             <div class="form-group">
-              <label>Extra Note (Optional)</label>
-              <textarea id="reminder-msg" rows="2" placeholder="Details..."></textarea>
+              <label id="lbl-custom-note">Note (Optional)</label>
+              <textarea id="custom-note" class="input-glass textarea-glass" rows="2" placeholder="Carry reports..."></textarea>
             </div>
 
             <div class="form-row">
               <div class="form-group half">
-                <label>Category</label>
-                <select id="reminder-category">
-                  <option value="personal">👤 Personal</option>
-                  <option value="work">💼 Work / Kaam</option>
-                  <option value="health">💊 Health / Dawa</option>
-                  <option value="bill">💰 Bill / Payment</option>
-                  <option value="other">📌 Other</option>
-                </select>
+                <label id="lbl-custom-time">Date & Time</label>
+                <input type="datetime-local" id="custom-datetime" class="input-glass" required>
               </div>
               <div class="form-group half">
-                <label>Priority</label>
-                <select id="reminder-priority">
+                <label id="lbl-custom-priority">Priority</label>
+                <select id="custom-priority" class="input-glass">
+                  <option value="normal">Normal</option>
                   <option value="high">High ⭐</option>
-                  <option value="normal">Normal</option>
                   <option value="urgent">Urgent 🚨</option>
                 </select>
               </div>
             </div>
 
+            <button type="submit" class="btn-pill btn-forest mt-2" id="btn-custom-save">
+              Save Custom Reminder
+            </button>
+          </form>
+        </div>
+
+        <!-- 3. Rozana (Daily Until Fixed Date) Mode -->
+        <div id="box-mode-daily" class="card-glass hidden">
+          <div class="card-title-row">
+            <h2 id="lbl-daily-heading">Daily Reminder</h2>
+            <span class="pill-tag" style="background:rgba(139,92,246,0.12); color:#7C3AED;">Recurring</span>
+          </div>
+
+          <form id="form-daily">
             <div class="form-group">
-              <label>Reminder Date & Time <span class="req">*</span></label>
-              <input type="datetime-local" id="reminder-time">
+              <label id="lbl-daily-msg">Message</label>
+              <input type="text" id="daily-msg" class="input-glass" placeholder="Take blood pressure medicine" required>
             </div>
 
-            <button type="submit" class="btn btn-emerald btn-block" id="save-reminder-btn">
-              Reminder Save Karein
+            <div class="form-group">
+              <label id="lbl-daily-time">Repeat Time Every Day</label>
+              <input type="time" id="daily-time" class="input-glass" value="08:00" required>
+            </div>
+
+            <div class="form-group">
+              <label id="lbl-daily-end">Run Until (End Date - Optional)</label>
+              <input type="date" id="daily-enddate" class="input-glass">
+              <small style="font-size:11px; color:var(--text-muted); margin-top:4px; display:block;">Leave blank to repeat every day forever.</small>
+            </div>
+
+            <button type="submit" class="btn-pill btn-forest mt-2" id="btn-daily-save">
+              Save Daily Reminder
+            </button>
+          </form>
+        </div>
+
+        <!-- 4. Remind a Contact Mode -->
+        <div id="box-mode-contact" class="card-glass hidden">
+          <div class="card-title-row">
+            <h2 id="lbl-contact-heading">Remind Contact</h2>
+            <span class="pill-tag" style="background:rgba(249,115,22,0.12); color:var(--accent-orange);">WhatsApp</span>
+          </div>
+
+          <form id="form-contact">
+            <div class="form-group">
+              <label id="lbl-contact-name">Contact Name</label>
+              <input type="text" id="contact-name" class="input-glass" placeholder="Rahul" required>
+            </div>
+
+            <div class="form-group">
+              <label id="lbl-contact-phone">WhatsApp Number</label>
+              <input type="tel" id="contact-phone" class="input-glass" placeholder="+91 98765 43210" required>
+            </div>
+
+            <div class="form-group">
+              <label id="lbl-contact-msg">Reminder Message</label>
+              <input type="text" id="contact-msg" class="input-glass" placeholder="Please send the signed document" required>
+            </div>
+
+            <div class="form-group">
+              <label id="lbl-contact-time">Send Time</label>
+              <input type="datetime-local" id="contact-datetime" class="input-glass" required>
+            </div>
+
+            <button type="submit" class="btn-pill btn-forest mt-2" id="btn-contact-save">
+              Schedule Contact Reminder
             </button>
           </form>
         </div>
 
       </section>
 
-      <!-- View 2: Reminders List -->
+      <!-- ============================================== -->
+      <!-- VIEW: REMINDERS LIST -->
+      <!-- ============================================== -->
       <section id="view-list" class="view">
-        <div class="filter-tabs">
-          <button class="filter-tab active" data-filter="all">Sabhi (<span id="count-all">0</span>)</button>
-          <button class="filter-tab" data-filter="pending">Aane Wale (<span id="count-pending">0</span>)</button>
-          <button class="filter-tab" data-filter="daily">🔁 Rozana (<span id="count-daily">0</span>)</button>
-          <button class="filter-tab" data-filter="sent">Bheje Gaye (<span id="count-sent">0</span>)</button>
+        <div class="card-title-row">
+          <h2 id="lbl-list-title">Your Reminders</h2>
+          <span id="reminders-count" class="pill-tag">0 Active</span>
         </div>
 
-        <div id="reminders-container" class="reminders-list">
-          <!-- Dynamically populated -->
+        <div id="reminders-container">
+          <!-- Dynamically Rendered Cards -->
         </div>
 
-        <div id="empty-state" class="empty-state hidden">
-          <div class="empty-icon-ring">⏰</div>
-          <h3>Koi Reminder Nahi Hai</h3>
-          <p>Upar 'Naya (+)' button se ek second me message save karein!</p>
-          <button class="btn btn-secondary mt-3" onclick="switchTab('add')">+ Naya Reminder Banayein</button>
+        <div id="list-empty-state" class="card-glass text-center hidden" style="padding:40px 20px;">
+          <div style="font-size:40px; margin-bottom:12px;">⏰</div>
+          <h3 id="lbl-empty-title" style="font-size:16px; margin-bottom:6px;">No Reminders</h3>
+          <p id="lbl-empty-sub" style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">Schedule your first reminder in seconds.</p>
+          <button type="button" class="btn-pill btn-secondary" onclick="switchNav('create')">+ Add Reminder</button>
         </div>
       </section>
 
-      <!-- View 3: WhatsApp & Notification Settings -->
+      <!-- ============================================== -->
+      <!-- VIEW: SUBSCRIPTION & COUPON PLANS -->
+      <!-- ============================================== -->
+      <section id="view-subscription" class="view">
+        <div class="card-glass">
+          <div class="card-title-row">
+            <h2 id="lbl-sub-title">Subscription Plans</h2>
+            <span class="pill-tag" id="sub-current-badge">10-Day Trial</span>
+          </div>
+
+          <p id="lbl-sub-desc" style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+            Enjoy seamless automated reminders on WhatsApp & Mobile Lock Screen.
+          </p>
+
+          <!-- Plan 1: Monthly Autopay -->
+          <div class="sub-plan-card selected" id="card-plan-monthly" onclick="selectPlan('monthly')">
+            <div class="plan-info">
+              <h3 id="lbl-plan-monthly">Monthly Autopay</h3>
+              <p>Base ₹20.00 + ₹0.50 Fee</p>
+            </div>
+            <div class="plan-price">₹20.50<span style="font-size:11px; font-weight:500;">/mo</span></div>
+          </div>
+
+          <!-- Plan 2: Yearly Autopay -->
+          <div class="sub-plan-card" id="card-plan-yearly" onclick="selectPlan('yearly')">
+            <div class="plan-info">
+              <h3 id="lbl-plan-yearly">Yearly Autopay</h3>
+              <p>Base ₹150.00 + ₹4.00 Fee • Best Value</p>
+            </div>
+            <div class="plan-price">₹154.00<span style="font-size:11px; font-weight:500;">/yr</span></div>
+          </div>
+
+          <button type="button" class="btn-pill btn-forest mt-3" id="btn-start-autopay" onclick="startRazorpayAutopay()">
+            Activate Autopay
+          </button>
+
+          <!-- Coupon Code Section -->
+          <div class="mt-4 pt-3" style="border-top:1px solid rgba(0,0,0,0.06);">
+            <label style="font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Have a Coupon Code?</label>
+            <div style="display:flex; gap:8px; margin-top:6px;">
+              <input type="text" id="coupon-input" class="input-glass" placeholder="FREE1M-XXXXXX" style="text-transform:uppercase;">
+              <button type="button" class="btn-pill btn-secondary" style="width:auto; padding:0 20px;" onclick="applyCouponCode()">Apply</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- VIEW: SETTINGS & SUPPORT -->
+      <!-- ============================================== -->
       <section id="view-settings" class="view">
-        
-        <!-- Ring / Notification Solution Card -->
-        <div class="alert-solution-box">
-          <div class="alert-icon">🔔</div>
-          <div class="alert-text">
-            <h4>💡 Phone Me Sound / Ring Kyun Chahiye?</h4>
-            <p>WhatsApp khud ke number (You) par ringtone nahi bajata. Agar aap chahte hain ki reminder aane par <strong>phone ki loud ring baje aur popup notification aaye</strong>:</p>
-            <p class="highlight-step">👉 Apne <strong>kisi dusre number (2nd SIM ya ghar ke phone)</strong> se QR code scan karein, aur niche apna <strong>Main Number</strong> daal dein!</p>
+        <div class="card-glass">
+          <div class="card-title-row">
+            <h2 id="lbl-settings-title">Settings & Account</h2>
+            <span class="pill-tag" id="user-email-chip">User</span>
+          </div>
+
+          <!-- Enable Push Notifications -->
+          <div class="form-group">
+            <label id="lbl-notif-perm">Lock-Screen Notifications</label>
+            <button type="button" class="btn-pill btn-secondary" id="btn-enable-push" onclick="enablePushNotifications()">
+              🔔 Enable Push Alerts
+            </button>
+          </div>
+
+          <!-- Customer Support Section -->
+          <div class="form-group mt-3">
+            <label id="lbl-support-heading">Customer Support</label>
+            <div style="background:rgba(255,255,255,0.85); padding:14px; border-radius:18px; border:1px solid var(--glass-border-subtle);">
+              <p style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">For queries, refunds or technical assistance:</p>
+              <a href="mailto:supportrememberme@gmail.com" class="btn-pill btn-forest" style="text-decoration:none; padding:10px 18px; font-size:13px;">
+                ✉️ Email: supportrememberme@gmail.com
+              </a>
+            </div>
+          </div>
+
+          <!-- Share App Button -->
+          <div class="form-group mt-3">
+            <button type="button" class="btn-pill btn-secondary" onclick="shareReminderMeApp()">
+              📲 Share Reminder Me App
+            </button>
+          </div>
+
+          <!-- Logout Button -->
+          <div class="form-group mt-3">
+            <button type="button" class="btn-pill btn-secondary" onclick="logoutUser()">
+              🚪 Log Out
+            </button>
+          </div>
+
+          <!-- Delete Account Button (DPDP Compliance) -->
+          <div class="form-group mt-4 pt-3" style="border-top:1px solid rgba(0,0,0,0.06);">
+            <button type="button" class="btn-pill btn-danger-outline" onclick="deleteUserAccount()">
+              🗑️ Delete My Account & Data
+            </button>
           </div>
         </div>
-
-        <!-- Connection Card -->
-        <div class="card card-elevated">
-          <div class="card-caption">
-            <h2>📲 WhatsApp Connection</h2>
-            <p>Direct WhatsApp Web Connection</p>
-          </div>
-
-          <!-- When Disconnected (QR Code shown) -->
-          <div id="wa-qr-section" class="text-center">
-            <div class="qr-box-container">
-              <img id="wa-connect-qr-img" src="" alt="WhatsApp QR Code" class="qr-image hidden">
-              <div id="wa-qr-loading" class="qr-loading-text">
-                <div class="spinner"></div>
-                <p>Naya QR Code ban raha hai...</p>
-              </div>
-            </div>
-            <div class="scan-instructions">
-              <h4>Kaise Link Karein:</h4>
-              <ol>
-                <li>Apne phone me <strong>WhatsApp</strong> kholein.</li>
-                <li>Upar <strong>3 dots (⋮)</strong> &rarr; <strong>Linked Devices (लिंक्ड डिवाइस)</strong> &rarr; <strong>Link a Device</strong>.</li>
-                <li>Ye QR code scan kar lein!</li>
-              </ol>
-            </div>
-          </div>
-
-          <!-- When Connected -->
-          <div id="wa-connected-section" class="connected-box hidden">
-            <div class="connected-badge">
-              <div class="badge-icon">✓</div>
-              <div class="badge-info">
-                <h3>WhatsApp Connected!</h3>
-                <p id="connected-user-phone">Sender Account: +91XXXXXXXXXX</p>
-              </div>
-            </div>
-
-            <div class="action-buttons mt-3">
-              <button type="button" class="btn btn-emerald" id="test-wa-btn">
-                📲 WhatsApp Par Test Message Bhejo
-              </button>
-              <button type="button" class="btn btn-outline-danger" id="disconnect-wa-btn">
-                Logout / Disconnect
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Target Recipient & Default Settings Form -->
-        <div class="card card-elevated mt-3">
-          <div class="card-caption">
-            <h2>⚙️ Notification & Default Settings</h2>
-            <p>Sirf ek baar set karein — baar-baar nahi!</p>
-          </div>
-
-          <form id="settings-form">
-            <div class="form-group">
-              <label for="settings-recipient">Aapka Main Mobile Number (Jahan Reminder Bajna Chahiye)</label>
-              <input type="tel" id="settings-recipient" placeholder="Jaise: 919876543210 (Country code ke saath)">
-              <small class="helper-text">Agar 2nd SIM se QR scan kiya hai, to yahan apna main number dalein taaki phone ring kare!</small>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group half">
-                <label for="settings-default-delay">Default Quick Time</label>
-                <select id="settings-default-delay">
-                  <option value="5">5 Min baad</option>
-                  <option value="10">10 Min baad</option>
-                  <option value="15" selected>15 Min baad</option>
-                  <option value="30">30 Min baad</option>
-                  <option value="60">1 Ghante baad</option>
-                  <option value="120">2 Ghante baad</option>
-                </select>
-              </div>
-              <div class="form-group half">
-                <label for="settings-default-priority">Default Priority</label>
-                <select id="settings-default-priority">
-                  <option value="high" selected>High ⭐</option>
-                  <option value="urgent">Urgent 🚨</option>
-                  <option value="normal">Normal</option>
-                </select>
-              </div>
-            </div>
-
-            <button type="submit" class="btn btn-secondary btn-block">Settings Save Karein</button>
-          </form>
-        </div>
-
       </section>
 
-      <!-- View 4: Mobile Connect -->
-      <section id="view-guide" class="view">
-        <div class="card card-elevated">
-          <div class="card-caption">
-            <h2>📱 Mobile Par Kaise Chalayein?</h2>
-            <p>Apne phone par kholkar Home Screen par add karein</p>
+      <!-- ============================================== -->
+      <!-- VIEW: EXCLUSIVE OWNER ADMIN PANEL -->
+      <!-- ============================================== -->
+      <section id="view-admin" class="view">
+        <div class="card-glass">
+          <div class="card-title-row">
+            <h2>👑 Owner Admin Panel</h2>
+            <span class="pill-tag" style="background:#0F5132; color:#fff;">Super Admin</span>
           </div>
 
-          <div class="mobile-connect-box">
-            <div class="ip-display">
-              <span class="label">Phone Browser me ye link kholein:</span>
-              <div class="link-badge" id="mobile-url-display">Loading link...</div>
+          <!-- Dashboard Stats Grid -->
+          <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:18px;">
+            <div class="admin-stat-card">
+              <div class="admin-stat-number" id="stat-total-users">0</div>
+              <div class="admin-stat-label">Total Users</div>
             </div>
-            <div class="qrcode-wrapper">
-              <img id="mobile-qr-img" src="" alt="Mobile Link QR" class="qr-image">
-              <p class="qr-label">Phone ke Camera se QR scan karke kholein</p>
+            <div class="admin-stat-card">
+              <div class="admin-stat-number" id="stat-active-trials">0</div>
+              <div class="admin-stat-label">Active Trials</div>
+            </div>
+            <div class="admin-stat-card">
+              <div class="admin-stat-number" id="stat-autopay-users">0</div>
+              <div class="admin-stat-label">Autopay Users</div>
+            </div>
+            <div class="admin-stat-card">
+              <div class="admin-stat-number" id="stat-revenue">₹0</div>
+              <div class="admin-stat-label">Total Revenue</div>
             </div>
           </div>
 
-          <div class="tips-box mt-3">
-            <h4>📲 App Jaisa Add Karein:</h4>
-            <p>Android Chrome me 3 dots (⋮) &rarr; <strong>"Add to Home screen"</strong> karein. iPhone me Share &rarr; <strong>"Add to Home Screen"</strong> karein.</p>
+          <!-- Export Data Button -->
+          <button type="button" class="btn-pill btn-forest mb-3" onclick="exportAdminDataCSV()">
+            📥 Export Users to CSV (Excel)
+          </button>
+
+          <!-- Generate Coupons -->
+          <div class="mt-3 p-3" style="background:rgba(255,255,255,0.7); border-radius:18px;">
+            <label style="font-size:12px; font-weight:700;">Generate Single-Use Coupons</label>
+            <div style="display:flex; gap:8px; margin-top:6px;">
+              <select id="admin-coupon-type" class="input-glass" style="flex:1;">
+                <option value="1month">1 Month Free</option>
+                <option value="1year">1 Year Free</option>
+              </select>
+              <button type="button" class="btn-pill btn-secondary" style="width:auto; padding:0 18px;" onclick="generateAdminCoupons()">+ Generate</button>
+            </div>
+            <div id="admin-generated-codes" class="mt-2" style="font-size:12px; font-family:monospace; color:var(--forest-green);"></div>
+          </div>
+
+          <!-- Users Table -->
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Plan</th>
+                  <th>Expires</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-tbody">
+                <!-- Dynamically Rendered -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- WhatsApp Bot Connection Manager for Owner -->
+          <div class="mt-4 p-3" style="background:rgba(255,255,255,0.85); border-radius:18px;">
+            <h3 style="font-size:14px; font-weight:700; margin-bottom:8px;">WhatsApp Sender Bot Status</h3>
+            <div id="admin-wa-status" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Checking WhatsApp...</div>
+            <img id="admin-wa-qr" src="" style="width:200px; height:200px; display:none; margin:0 auto 10px auto; border-radius:14px;">
+            <button type="button" class="btn-pill btn-secondary" onclick="checkAdminWhatsAppStatus()">Refresh WhatsApp QR</button>
           </div>
         </div>
       </section>
@@ -378,72 +467,57 @@
 
     <!-- Bottom Navigation Bar -->
     <nav class="bottom-nav">
-      <button class="nav-item active" data-view="add">
-        <div class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </div>
-        <span>Naya (+)</span>
+      <button class="nav-pill-btn active" data-nav="create" onclick="switchNav('create')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="16"></line>
+          <line x1="8" y1="12" x2="16" y2="12"></line>
+        </svg>
+        <span id="nav-lbl-create">Create</span>
       </button>
 
-      <button class="nav-item" data-view="list">
-        <div class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-        </div>
-        <span>Reminders</span>
+      <button class="nav-pill-btn" data-nav="list" onclick="switchNav('list')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <span id="nav-lbl-list">Reminders</span>
       </button>
 
-      <button class="nav-item" data-view="settings">
-        <div class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </div>
-        <span>Settings</span>
+      <button class="nav-pill-btn" data-nav="subscription" onclick="switchNav('subscription')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+          <line x1="2" y1="10" x2="22" y2="10"></line>
+        </svg>
+        <span id="nav-lbl-plans">Plans</span>
       </button>
 
-      <button class="nav-item" data-view="guide">
-        <div class="nav-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-            <line x1="12" y1="18" x2="12.01" y2="18"></line>
-          </svg>
-        </div>
-        <span>Mobile</span>
+      <button class="nav-pill-btn" data-nav="settings" onclick="switchNav('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span id="nav-lbl-settings">Settings</span>
+      </button>
+
+      <!-- Owner Admin Nav Button (Shown only if logged in as Owner) -->
+      <button class="nav-pill-btn hidden" id="nav-btn-admin" data-nav="admin" onclick="switchNav('admin')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+        <span>Admin</span>
       </button>
     </nav>
 
-    <!-- Toast Notification Popup -->
-    <div id="toast" class="toast"></div>
-
-    <!-- QR Modal -->
-    <div id="qr-modal" class="modal-backdrop hidden">
-      <div class="modal-box">
-        <div class="modal-header">
-          <h3>📱 Mobile Link</h3>
-          <button class="close-modal-btn" onclick="closeQRModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="modal-qr-container">
-            <img id="modal-qr-img" src="" alt="Mobile Link QR" class="qr-image">
-          </div>
-          <div class="modal-url" id="modal-url-text">http://...</div>
-          <button class="btn btn-secondary btn-block mt-3" onclick="copyMobileUrl()">Copy Link</button>
-        </div>
-      </div>
-    </div>
+    <!-- Global Toast Pill -->
+    <div id="toast" class="toast-pill"></div>
 
   </div>
 
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

@@ -1,3 +1,8 @@
 node_modules/
 npm-debug.log
 .DS_Store
+*.zip
+data/*.db
+auth_info_baileys/
+.env
+
