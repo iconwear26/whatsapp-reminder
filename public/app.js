@@ -1,5 +1,88 @@
 // Reminder Me - Luxury Edition (Version 3.0)
 
+// -------------------------------------------------------------
+// 🌐 SMART BACKEND RESOLUTION FOR WEB & ANDROID APK
+// -------------------------------------------------------------
+const BACKEND_BASE = (window.location.protocol.startsWith('http') && !window.location.host.includes('localhost') && !window.location.host.includes('127.0.0.1'))
+  ? ''
+  : 'https://whatsapp-reminder-0yad.onrender.com';
+
+const originalFetch = window.fetch;
+window.fetch = function(resource, init) {
+  if (typeof resource === 'string' && resource.startsWith('/api/')) {
+    resource = BACKEND_BASE + resource;
+  }
+  return originalFetch.call(this, resource, init);
+};
+
+// -------------------------------------------------------------
+// 📱 NATIVE ANDROID CAPACITOR ALARMS & NOTIFICATIONS
+// -------------------------------------------------------------
+function stringHashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+async function scheduleNativeLocalNotification(reminder) {
+  try {
+    const Cap = window.Capacitor;
+    if (!Cap || !Cap.Plugins || !Cap.Plugins.LocalNotifications) return;
+
+    const LocalNotifications = Cap.Plugins.LocalNotifications;
+    try {
+      await LocalNotifications.requestPermissions();
+    } catch (e) {}
+
+    const triggerDate = new Date(reminder.reminderTimestamp || reminder.reminderTime);
+    if (isNaN(triggerDate.getTime()) || triggerDate.getTime() <= Date.now()) return;
+
+    const notifId = stringHashCode(String(reminder.id || Date.now())) % 2147483647;
+
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: notifId,
+          title: '🌸 Reminder Me: ' + (reminder.title || 'Task Due'),
+          body: (reminder.message && reminder.message !== reminder.title) ? reminder.message : 'Tap to view reminder details.',
+          schedule: { at: triggerDate, allowWhileIdle: true },
+          extra: {
+            reminderId: reminder.id,
+            title: reminder.title,
+            message: reminder.message
+          }
+        }
+      ]
+    });
+    console.log('[Native] Scheduled Android OS alarm for:', triggerDate.toLocaleString());
+  } catch (err) {
+    console.warn('[Native LocalNotification] Scheduling error:', err);
+  }
+}
+
+// Setup native notification tap listener
+if (typeof window !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        window.Capacitor.Plugins.LocalNotifications.requestPermissions().catch(() => {});
+        window.Capacitor.Plugins.LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
+          const extra = action && action.notification && action.notification.extra;
+          if (extra && extra.reminderId) {
+            const found = (currentReminders && currentReminders.find(r => r.id === extra.reminderId)) || extra;
+            if (typeof openAestheticModal === 'function') {
+              openAestheticModal(found);
+            }
+          }
+        });
+      }
+    } catch (e) {}
+  });
+}
+
 // Localization Dictionaries (English Default & Hindi)
 const i18n = {
   en: {
@@ -304,6 +387,8 @@ function scheduleReminderTimers(reminders) {
   reminders.forEach(r => {
     if (r.status === 'completed' || r.clientPopped === 1 || handledReminderIds.has(r.id)) return;
     const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
+    // Register native Android OS exact alarm (works when app is closed or phone locked)
+    scheduleNativeLocalNotification(r);
     const diff = dueMs - nowMs;
     if (diff <= 1000 && diff > -300000) {
       // Due right now or in last 5 minutes!

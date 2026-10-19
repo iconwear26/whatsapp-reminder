@@ -1,0 +1,83 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Reminder Me APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Make Gradlew Executable
+        run: chmod +x android/gradlew
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Prepare APK Output
+        run: |
+          mkdir -p release-output
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-output/ReminderMe.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReminderMe-Android-APK
+          path: release-output/ReminderMe.apk
+          retention-days: 30
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/main')
+        with:
+          tag_name: v2.0-apk
+          name: "Reminder Me Android App (APK)"
+          body: |
+            ### 🌸 Reminder Me - Android APK Release
+            
+            This is the native Android installation file (`.apk`) for the **Reminder Me** app.
+            
+            #### ✨ Highlights:
+            - **Lock-Screen Alerts:** Native Android OS alarms ring on time even when your phone is locked.
+            - **Works When App is Closed:** Scheduled directly in Android OS AlarmManager.
+            - **100% Free:** Completely free, no browser throttling.
+            
+            #### 📲 Installation:
+            1. Download `ReminderMe.apk` to your phone.
+            2. Tap the file and select **Install** (allow "Install unknown apps" if prompted).
+            3. Grant notification permissions and log in to your account.
+          files: release-output/ReminderMe.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
