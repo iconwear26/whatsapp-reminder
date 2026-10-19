@@ -76,25 +76,12 @@ jobs:
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
+        if: always()
         continue-on-error: true
-        if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: v2.0-apk
-          name: "Reminder Me Android App (APK)"
-          body: |
-            ### 🌸 Reminder Me - Android APK Release
-            
-            This is the native Android installation file (`.apk`) for the **Reminder Me** app.
-            
-            #### ✨ Highlights:
-            - **Lock-Screen Alerts:** Native Android OS alarms ring on time even when your phone is locked.
-            - **Works When App is Closed:** Scheduled directly in Android OS AlarmManager.
-            - **100% Free:** Completely free, no browser throttling.
-            
-            #### 📲 Installation:
-            1. Download `ReminderMe.apk` to your phone.
-            2. Tap the file and select **Install** (allow "Install unknown apps" if prompted).
-            3. Grant notification permissions and log in to your account.
-          files: release-output/ReminderMe.apk
+          name: "Reminder Me Android App"
+          body_path: build.log
+          files: release-output/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
