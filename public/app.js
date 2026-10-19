@@ -407,6 +407,9 @@ function applyLanguage(lang) {
   document.getElementById('btn-enable-push').textContent = t.enablePush;
   document.getElementById('lbl-support-heading').textContent = t.customerSupport;
 
+  const btnBannerTest = document.getElementById('btn-banner-test');
+  if (btnBannerTest) btnBannerTest.textContent = t.testAlertsBtn;
+
   updateUserBadge();
   renderReminders();
 }
@@ -495,7 +498,6 @@ async function quickSave(minutes, preset) {
       return;
     }
 
-    playNotificationChime();
     const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
     showToast(`✓ Scheduled for ${timeFormatted}`);
     inputEl.value = '';
@@ -539,7 +541,6 @@ document.getElementById('form-custom').addEventListener('submit', async (e) => {
       return;
     }
 
-    playNotificationChime();
     const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
     showToast(`✓ Saved for ${timeFormatted}`);
     document.getElementById('form-custom').reset();
@@ -582,7 +583,6 @@ document.getElementById('form-daily').addEventListener('submit', async (e) => {
       return;
     }
 
-    playNotificationChime();
     showToast(`✓ Daily reminder scheduled at ${time}`);
     document.getElementById('form-daily').reset();
     loadReminders();
@@ -619,21 +619,10 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
       return;
     }
 
-    playNotificationChime();
-
     if (data.targetUserNotified) {
-      showToast(`✓ Delivered directly to ${contactName}'s app account!`, 4000);
+      showToast(`✓ Delivered directly to ${contactName}'s app account!`, 3000);
     } else {
       showToast(`✓ Reminder scheduled for ${contactName}!`, 3000);
-    }
-
-    // Auto-prompt instant 1-tap SMS / Share if phone provided
-    if (data.shareMessage && phone) {
-      setTimeout(() => {
-        if (confirm(`Send reminder alert to ${contactName} (${phone}) right now via SMS / Messaging?`)) {
-          shareReminderDirectly(phone, data.shareMessage);
-        }
-      }, 500);
     }
 
     document.getElementById('form-contact').reset();
@@ -971,11 +960,36 @@ function initAppSession() {
   // Check Notification Permission for Lock-Screen Alerts Banner
   const permBanner = document.getElementById('lockscreen-perm-banner');
   if (permBanner) {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      permBanner.classList.add('hidden');
-      ensurePushSubscription();
-    } else if ('Notification' in window && Notification.permission === 'default') {
-      permBanner.classList.remove('hidden');
+    if ('Notification' in window) {
+      if (Notification.permission === 'granted') {
+        permBanner.classList.remove('hidden');
+        const titleEl = document.getElementById('lbl-lockscreen-title');
+        const subEl = document.getElementById('lbl-lockscreen-sub');
+        const btnEnable = document.getElementById('btn-banner-enable');
+        if (titleEl) titleEl.textContent = 'Lock-Screen Alerts Active ✓';
+        if (subEl) subEl.textContent = 'Phone notifications & sweet chime sound connected.';
+        if (btnEnable) btnEnable.style.display = 'none';
+        ensurePushSubscription();
+      } else if (Notification.permission === 'denied') {
+        permBanner.classList.remove('hidden');
+        const titleEl = document.getElementById('lbl-lockscreen-title');
+        const subEl = document.getElementById('lbl-lockscreen-sub');
+        const btnEnable = document.getElementById('btn-banner-enable');
+        if (titleEl) titleEl.textContent = 'Notifications Blocked ⚠️';
+        if (subEl) subEl.textContent = 'Tap lock 🔒 beside site address & set Notifications to Allow.';
+        if (btnEnable) btnEnable.style.display = 'none';
+      } else {
+        permBanner.classList.remove('hidden');
+        const titleEl = document.getElementById('lbl-lockscreen-title');
+        const subEl = document.getElementById('lbl-lockscreen-sub');
+        const btnEnable = document.getElementById('btn-banner-enable');
+        if (titleEl) titleEl.textContent = 'Enable Lock-Screen Alerts';
+        if (subEl) subEl.textContent = 'Allow alerts to ring even when phone screen is locked.';
+        if (btnEnable) {
+          btnEnable.style.display = 'inline-block';
+          btnEnable.textContent = 'Allow Alerts 🔔';
+        }
+      }
     } else {
       permBanner.classList.add('hidden');
     }
@@ -1162,7 +1176,8 @@ async function enablePushNotifications() {
   try {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') {
-      showToast('Notification permission was denied in browser settings');
+      showToast('Notification permission was not granted in browser');
+      initAppSession();
       return;
     }
 
@@ -1170,10 +1185,13 @@ async function enablePushNotifications() {
     const vapidRes = await fetch('/api/push/public-key');
     const { publicKey } = await vapidRes.json();
 
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlB64ToUint8Array(publicKey)
-    });
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(publicKey)
+      });
+    }
 
     const res = await fetch('/api/push/subscribe', {
       method: 'POST',
@@ -1185,10 +1203,8 @@ async function enablePushNotifications() {
     });
 
     if (res.ok) {
-      playNotificationChime();
-      const permBanner = document.getElementById('lockscreen-perm-banner');
-      if (permBanner) permBanner.classList.add('hidden');
-      showToast('✓ Lock-screen alerts & sweet tone enabled!');
+      showToast('✓ Lock-screen alerts connected! Tap "Test 🔔" to test.');
+      initAppSession();
     }
   } catch (err) {
     showToast('Push setup notice: ' + err.message);
@@ -1236,18 +1252,18 @@ async function testLockScreenAlert() {
     return;
   }
 
-  playNotificationChime();
-
   if (Notification.permission !== 'granted') {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') {
-      showToast('Please enable notifications to receive lock-screen alerts');
+      showToast('Please allow notifications in browser settings');
       return;
     }
     await enablePushNotifications();
+  } else {
+    await ensurePushSubscription();
   }
 
-  showToast('🔔 Sending test notification... Lock your screen now!');
+  showToast('🔔 Sending alert... Lock your phone screen now!');
 
   try {
     const res = await fetch('/api/push/test', {
@@ -1256,13 +1272,7 @@ async function testLockScreenAlert() {
     });
     const data = await res.json();
     if (res.ok) {
-      showToast('✓ Alert sent! Check lock screen & notification bar.');
-      // Also trigger in-app slide banner
-      showIosNotificationBanner({
-        id: 'test_preview_' + Date.now(),
-        title: '🔔 Reminder Me Test Alert',
-        message: 'Lock-screen notification with sweet chime is working!'
-      });
+      showToast('✓ Alert dispatched! Check your lock screen.');
     } else {
       showToast(data.error || 'Failed to send test alert');
     }
@@ -1407,11 +1417,11 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Register PWA Service Worker
+// Register PWA Service Worker immediately
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration error:', err));
-  });
+  navigator.serviceWorker.register('/sw.js').then((reg) => {
+    console.log('SW registered successfully:', reg.scope);
+  }).catch(err => console.log('SW registration error:', err));
 }
 
 // Default DateTime for custom inputs in local time

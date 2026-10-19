@@ -49,6 +49,7 @@ function sanitizePhone(phone) {
 async function sendWebPushToUser(userId, payload) {
   try {
     const subs = await dbAsync.all('SELECT * FROM push_subscriptions WHERE userId = ?', [userId]);
+    console.log(`[WebPush] Dispatching to user ${userId}, active device subscriptions count: ${subs.length}`);
     const payloadStr = JSON.stringify(payload);
     for (const sub of subs) {
       try {
@@ -56,9 +57,12 @@ async function sendWebPushToUser(userId, payload) {
           endpoint: sub.endpoint,
           keys: JSON.parse(sub.keys)
         };
-        await webpush.sendNotification(pushConfig, payloadStr);
+        const result = await webpush.sendNotification(pushConfig, payloadStr);
+        console.log(`[WebPush] Successfully pushed to ${sub.endpoint.substring(0, 45)}... (status: ${result.statusCode})`);
       } catch (err) {
+        console.error(`[WebPush] Failed push to ${sub.endpoint.substring(0, 45)}... error: ${err.statusCode || err.message}`);
         if (err.statusCode === 410 || err.statusCode === 404) {
+          console.log(`[WebPush] Cleaning up inactive subscription ${sub.id}`);
           await dbAsync.run('DELETE FROM push_subscriptions WHERE id = ?', [sub.id]);
         }
       }
@@ -851,9 +855,9 @@ app.post('/api/push/test', authMiddleware, async (req, res) => {
     await sendWebPushToUser(req.user.id, {
       title: '🔔 Reminder Me Test Alert',
       body: 'Lock-screen notifications and sweet chime sound working perfectly! 🌸',
-      icon: '/icons/icon.svg',
-      badge: '/icons/icon.svg',
-      image: '/images/card-art.jpg',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/badge-96.png',
+      image: '/images/art_morning_sun.jpg',
       data: { test: true }
     });
     res.json({ success: true, message: '✓ Test notification sent! Check your notification tray or lock screen.' });
@@ -993,8 +997,8 @@ setInterval(async () => {
           body: reminder.message && reminder.message !== reminder.title 
             ? `${reminder.message} (${dueTime})` 
             : `Scheduled reminder is due (${dueTime})`,
-          icon: '/icons/icon.svg',
-          badge: '/icons/icon.svg',
+          icon: '/icons/icon-192.png',
+          badge: '/icons/badge-96.png',
           image: artImage,
           data: { reminderId: reminder.id }
         });
@@ -1006,8 +1010,8 @@ setInterval(async () => {
             await sendWebPushToUser(contactUser.id, {
               title: `🔔 Reminder: ${reminder.title}`,
               body: `${reminder.message || reminder.title} (${dueTime})`,
-              icon: '/icons/icon.svg',
-              badge: '/icons/icon.svg',
+              icon: '/icons/icon-192.png',
+              badge: '/icons/badge-96.png',
               image: artImage,
               data: { reminderId: reminder.id }
             });
