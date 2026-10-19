@@ -43,20 +43,13 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../gradle_build.log
-
-      - name: Upload Build Log on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-failure-log
-          path: gradle_build.log
-
-      - name: Prepare APK Output
-        run: |
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          echo "=== SEARCHING FOR ALL BUILT APKS ==="
+          find . -name "*.apk"
+          cd ..
           mkdir -p release-output
-          find android -name "*.apk"
-          find android -name "*.apk" -exec cp {} release-output/ReminderMe.apk \;
+          find android -name "*.apk" -exec cp -v {} release-output/ReminderMe.apk \;
+          test -f release-output/ReminderMe.apk || { echo "ERROR: ReminderMe.apk was not found!"; find android/app/build -maxdepth 4; exit 1; }
           ls -la release-output/
 
       - name: Upload APK Artifact
@@ -64,6 +57,7 @@ jobs:
         with:
           name: ReminderMe-Android-APK
           path: release-output/ReminderMe.apk
+          if-no-files-found: error
           retention-days: 30
 
       - name: Create or Update GitHub Release
