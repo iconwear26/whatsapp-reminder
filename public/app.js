@@ -1,4 +1,4 @@
-// Reminder Me - Client Application Logic
+// Reminder Me - Client Application Logic (Version 2.0)
 
 // Localization Dictionaries (English Default & Hindi)
 const i18n = {
@@ -10,15 +10,16 @@ const i18n = {
     reminders: 'Reminders',
     plans: 'Plans',
     settings: 'Settings',
+    admin: 'Admin',
     quick: 'Quick Reminder',
     custom: 'Custom Reminder',
     daily: 'Daily Reminder',
-    contact: 'Remind Contact',
+    contact: 'Remind Someone',
     whatToRemember: 'What do you want to remember?',
-    saveDefault: 'Save ({time} Min Default)',
+    saveDefault: 'Save (15 Min Default)',
     saveCustom: 'Save Custom Reminder',
     saveDaily: 'Save Daily Reminder',
-    saveContact: 'Schedule Contact Reminder',
+    saveContact: 'Save Contact Reminder',
     noReminders: 'No Reminders',
     noRemindersSub: 'Schedule your first reminder in seconds.',
     monthlyPlan: 'Monthly Autopay',
@@ -41,15 +42,16 @@ const i18n = {
     reminders: 'रिमाइंडर',
     plans: 'प्लान्स',
     settings: 'सेटिंग्स',
+    admin: 'एडमिन',
     quick: 'क्विक रिमाइंडर',
     custom: 'कस्टम रिमाइंडर',
     daily: 'रोजाना रिमाइंडर',
     contact: 'कांटेक्ट को याद दिलाएं',
     whatToRemember: 'आपको क्या याद रखना है?',
-    saveDefault: 'सेव करें ({time} मिनट)',
+    saveDefault: 'सेव करें (15 मिनट)',
     saveCustom: 'कस्टम रिमाइंडर सेव करें',
     saveDaily: 'रोजाना रिमाइंडर सेव करें',
-    saveContact: 'कांटेक्ट रिमाइंडर सेट करें',
+    saveContact: 'कांटेक्ट रिमाइंडर सेव करें',
     noReminders: 'कोई रिमाइंडर नहीं है',
     noRemindersSub: 'चंद सेकंड में अपना पहला रिमाइंडर सेट करें।',
     monthlyPlan: 'मंथली ऑटोपे',
@@ -71,6 +73,8 @@ let authToken = localStorage.getItem('reminder_me_token') || null;
 let currentUser = null;
 let selectedPlan = 'monthly';
 let currentReminders = [];
+let activeAlarmReminder = null;
+let alarmAudioInterval = null;
 
 // DOM Elements
 const views = {
@@ -88,9 +92,11 @@ const langLabel = document.getElementById('lang-label');
 const trialBadge = document.getElementById('trial-badge');
 const trialText = document.getElementById('trial-text');
 const navAdminBtn = document.getElementById('nav-btn-admin');
+const navPlansBtn = document.getElementById('nav-btn-plans');
+const alarmModal = document.getElementById('alarm-modal');
 
 // -------------------------------------------------------------
-// TOAST NOTIFICATIONS & AUDIO ALARMS
+// TOAST NOTIFICATIONS & AUDIO ALARM
 // -------------------------------------------------------------
 function showToast(msg, duration = 3000) {
   toastEl.textContent = msg;
@@ -98,32 +104,137 @@ function showToast(msg, duration = 3000) {
   setTimeout(() => toastEl.classList.remove('show'), duration);
 }
 
-function playAlarmTone() {
+// Built-in Web Audio Chime Alarm
+function playAlarmChime() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
-    osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2); // G5
-    osc.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.3); // C6
+    function playTone(freq, time, duration = 0.25) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, time);
+      gain.gain.setValueAtTime(0.4, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(time);
+      osc.stop(time + duration);
+    }
 
-    gain.gain.setValueAtTime(0.35, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.55);
+    const t = ctx.currentTime;
+    playTone(587.33, t, 0.2);        // D5
+    playTone(739.99, t + 0.15, 0.2); // F#5
+    playTone(880.00, t + 0.3, 0.3);  // A5
+    playTone(1174.66, t + 0.45, 0.5); // D6
+  } catch (e) {
+    console.log('Audio chime error:', e);
+  }
+}
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.55);
-  } catch (e) {}
+function startContinuousAlarm() {
+  stopContinuousAlarm();
+  playAlarmChime();
+  alarmAudioInterval = setInterval(playAlarmChime, 3000);
+}
+
+function stopContinuousAlarm() {
+  if (alarmAudioInterval) {
+    clearInterval(alarmAudioInterval);
+    alarmAudioInterval = null;
+  }
 }
 
 // -------------------------------------------------------------
-// LOCALIZATION (ENGLISH DEFAULT / HINDI DYNAMIC TOGGLE)
+// IN-APP NOTIFICATION ALARM POPUP
+// -------------------------------------------------------------
+function triggerAlarmModal(reminder) {
+  activeAlarmReminder = reminder;
+  const dueTime = new Date(reminder.reminderTime).toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit'
+  });
+
+  document.getElementById('alarm-time-display').textContent = dueTime;
+  document.getElementById('alarm-title-display').textContent = reminder.title || 'Reminder Alert';
+  document.getElementById('alarm-message-display').textContent = reminder.message || reminder.title || '';
+  
+  alarmModal.classList.remove('hidden');
+  startContinuousAlarm();
+
+  // Try device vibration if available
+  if ('vibrate' in navigator) {
+    try { navigator.vibrate([400, 200, 400, 200, 600]); } catch (e) {}
+  }
+}
+
+async function dismissCurrentAlarm() {
+  stopContinuousAlarm();
+  alarmModal.classList.add('hidden');
+  if (!activeAlarmReminder) return;
+
+  try {
+    await fetch(`/api/reminders/${activeAlarmReminder.id}/dismiss`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    showToast('✓ Reminder marked complete');
+    loadReminders();
+  } catch (e) {
+    console.error('Dismiss error:', e);
+  }
+  activeAlarmReminder = null;
+}
+
+async function snoozeCurrentAlarm(minutes = 5) {
+  stopContinuousAlarm();
+  alarmModal.classList.add('hidden');
+  if (!activeAlarmReminder) return;
+
+  try {
+    const res = await fetch(`/api/reminders/${activeAlarmReminder.id}/snooze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ minutes })
+    });
+    const data = await res.json();
+    showToast(`💤 Snoozed for ${minutes} minutes`);
+    loadReminders();
+  } catch (e) {
+    console.error('Snooze error:', e);
+  }
+  activeAlarmReminder = null;
+}
+
+// Background poller for due in-app reminders
+const notifiedIds = new Set();
+async function pollDueReminders() {
+  if (!authToken || !currentUser) return;
+  try {
+    const res = await fetch('/api/reminders/due-notifications', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.due && data.due.length > 0) {
+      for (const rem of data.due) {
+        if (!notifiedIds.has(rem.id)) {
+          notifiedIds.add(rem.id);
+          triggerAlarmModal(rem);
+          break; // Show one modal at a time
+        }
+      }
+    }
+  } catch (e) {}
+}
+setInterval(pollDueReminders, 6000);
+
+// -------------------------------------------------------------
+// LANGUAGE LOCALIZATION SYSTEM
 // -------------------------------------------------------------
 function applyLanguage(lang) {
   currentLang = lang;
@@ -131,28 +242,41 @@ function applyLanguage(lang) {
   const t = i18n[lang];
 
   langLabel.textContent = t.switchLangBtn;
+
+  // Nav labels
   document.getElementById('nav-lbl-create').textContent = t.create;
   document.getElementById('nav-lbl-list').textContent = t.reminders;
   document.getElementById('nav-lbl-plans').textContent = t.plans;
   document.getElementById('nav-lbl-settings').textContent = t.settings;
+  const adminLbl = document.getElementById('nav-lbl-admin');
+  if (adminLbl) adminLbl.textContent = t.admin;
 
+  // Create headings & buttons
   document.getElementById('lbl-quick-heading').textContent = t.quick;
   document.getElementById('lbl-custom-heading').textContent = t.custom;
   document.getElementById('lbl-daily-heading').textContent = t.daily;
   document.getElementById('lbl-contact-heading').textContent = t.contact;
   document.getElementById('quick-input').placeholder = t.whatToRemember;
-
+  document.getElementById('btn-quick-save-default').textContent = t.saveDefault;
   document.getElementById('btn-custom-save').textContent = t.saveCustom;
   document.getElementById('btn-daily-save').textContent = t.saveDaily;
   document.getElementById('btn-contact-save').textContent = t.saveContact;
 
+  // List empty state
   document.getElementById('lbl-list-title').textContent = t.reminders;
   document.getElementById('lbl-empty-title').textContent = t.noReminders;
   document.getElementById('lbl-empty-sub').textContent = t.noRemindersSub;
 
+  // Plans
+  document.getElementById('lbl-sub-title').textContent = t.plans;
   document.getElementById('lbl-plan-monthly').textContent = t.monthlyPlan;
   document.getElementById('lbl-plan-yearly').textContent = t.yearlyPlan;
+
+  // Settings
+  document.getElementById('lbl-settings-title').textContent = t.settings;
+  document.getElementById('lbl-notif-perm').textContent = t.lockScreenNotif;
   document.getElementById('btn-enable-push').textContent = t.enablePush;
+  document.getElementById('lbl-support-heading').textContent = t.customerSupport;
 
   updateUserBadge();
 }
@@ -160,39 +284,284 @@ function applyLanguage(lang) {
 langToggleBtn.addEventListener('click', () => {
   const nextLang = currentLang === 'en' ? 'hi' : 'en';
   applyLanguage(nextLang);
-  showToast(nextLang === 'en' ? 'Language: English' : 'भाषा: हिन्दी');
+  showToast(nextLang === 'hi' ? 'भाषा: हिन्दी' : 'Language: English');
 });
 
 // -------------------------------------------------------------
-// NAVIGATION HANDLER
+// NAVIGATION SYSTEM (Customized for Owner vs Normal User)
 // -------------------------------------------------------------
-function switchNav(navKey) {
-  if (!authToken && navKey !== 'auth') {
-    switchNav('auth');
+function switchNav(targetView) {
+  // If user is Owner and clicks on 'subscription' view, redirect to create or admin
+  if (currentUser && currentUser.isOwner && targetView === 'subscription') {
+    targetView = 'admin';
+  }
+
+  // Update view visibility
+  Object.keys(views).forEach(v => {
+    if (views[v]) {
+      views[v].classList.toggle('active', v === targetView);
+    }
+  });
+
+  // Update bottom nav icons
+  document.querySelectorAll('.bottom-nav .nav-pill-btn').forEach(btn => {
+    const nav = btn.getAttribute('data-nav');
+    btn.classList.toggle('active', nav === targetView);
+  });
+
+  if (targetView === 'list') {
+    loadReminders();
+  } else if (targetView === 'admin') {
+    loadAdminDashboard();
+  }
+}
+
+// -------------------------------------------------------------
+// CREATE REMINDER MODES
+// -------------------------------------------------------------
+function switchCreateMode(mode) {
+  const modes = ['quick', 'custom', 'daily', 'contact'];
+  modes.forEach(m => {
+    const tab = document.getElementById(`tab-${m}`);
+    const box = document.getElementById(`box-mode-${m}`);
+    if (tab) tab.classList.toggle('active', m === mode);
+    if (box) box.classList.toggle('hidden', m !== mode);
+  });
+}
+
+// Mode 1: Quick Tap Save
+async function quickSave(minutes, preset) {
+  const inputEl = document.getElementById('quick-input');
+  const message = inputEl.value.trim() || 'Quick Task';
+
+  try {
+    const res = await fetch('/api/reminders/quick', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ message, minutes, preset })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to save reminder'));
+      return;
+    }
+
+    playAlarmChime();
+    showToast(`✓ Scheduled for ${data.scheduledTime}!`);
+    inputEl.value = '';
+    loadReminders();
+    switchNav('list');
+  } catch (err) {
+    showToast('❌ Error: ' + err.message);
+  }
+}
+
+// Mode 2: Custom Date & Time Form
+document.getElementById('form-custom').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = document.getElementById('custom-title').value.trim();
+  const note = document.getElementById('custom-note').value.trim();
+  const datetimeVal = document.getElementById('custom-datetime').value;
+  const priority = document.getElementById('custom-priority').value;
+
+  if (!datetimeVal) {
+    showToast('Please select Date & Time');
+    return;
+  }
+  const [date, time] = datetimeVal.split('T');
+
+  try {
+    const res = await fetch('/api/reminders/custom', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ title, note, date, time, priority })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to save'));
+      return;
+    }
+
+    playAlarmChime();
+    showToast('✓ Custom reminder saved!');
+    document.getElementById('form-custom').reset();
+    loadReminders();
+    switchNav('list');
+  } catch (err) {
+    showToast('❌ ' + err.message);
+  }
+});
+
+// Mode 3: Rozana (Daily Recurring) Form
+document.getElementById('form-daily').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = document.getElementById('daily-msg').value.trim();
+  const time = document.getElementById('daily-time').value;
+  const kisDateTak = document.getElementById('daily-enddate').value;
+
+  try {
+    const res = await fetch('/api/reminders/daily', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ title, time, kisDateTak })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to save'));
+      return;
+    }
+
+    playAlarmChime();
+    showToast('✓ Daily recurring reminder scheduled!');
+    document.getElementById('form-daily').reset();
+    loadReminders();
+    switchNav('list');
+  } catch (err) {
+    showToast('❌ ' + err.message);
+  }
+});
+
+// Mode 4: Remind Someone Form
+document.getElementById('form-contact').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const contactName = document.getElementById('contact-name').value.trim();
+  const phone = document.getElementById('contact-phone').value.trim();
+  const title = document.getElementById('contact-title').value.trim();
+  const datetimeVal = document.getElementById('contact-datetime').value;
+
+  let date = null;
+  let time = null;
+  if (datetimeVal) {
+    [date, time] = datetimeVal.split('T');
+  }
+
+  try {
+    const res = await fetch('/api/reminders/contact', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ contactName, phone, title, date, time })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast('❌ ' + (data.error || 'Failed to save'));
+      return;
+    }
+
+    playAlarmChime();
+    showToast(`✓ Reminder scheduled for ${contactName}!`);
+    document.getElementById('form-contact').reset();
+    loadReminders();
+    switchNav('list');
+  } catch (err) {
+    showToast('❌ ' + err.message);
+  }
+});
+
+// -------------------------------------------------------------
+// REMINDERS LIST
+// -------------------------------------------------------------
+async function loadReminders() {
+  if (!authToken) return;
+  try {
+    const res = await fetch('/api/reminders', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    currentReminders = await res.json();
+    renderReminders();
+  } catch (err) {
+    console.error('Error fetching reminders:', err);
+  }
+}
+
+function renderReminders() {
+  const container = document.getElementById('reminders-container');
+  const emptyState = document.getElementById('list-empty-state');
+  const countBadge = document.getElementById('reminders-count');
+
+  countBadge.textContent = `${currentReminders.length} Active`;
+
+  if (currentReminders.length === 0) {
+    container.innerHTML = '';
+    emptyState.classList.remove('hidden');
     return;
   }
 
-  document.querySelectorAll('.nav-pill-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.nav === navKey);
-  });
+  emptyState.classList.add('hidden');
+  container.innerHTML = currentReminders.map(r => {
+    const d = new Date(r.reminderTime);
+    const timeFormatted = d.toLocaleString(currentLang === 'hi' ? 'hi-IN' : 'en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
 
-  Object.keys(views).forEach(k => {
-    views[k].classList.toggle('active', k === navKey);
-  });
+    const isDaily = r.repeat === 'daily';
+    const contactBadge = r.targetContactName ? `<span class="pill-tag" style="background:rgba(249,115,22,0.12); color:#F97316;">For: ${escapeHtml(r.targetContactName)}</span>` : '';
+    const dailyBadge = isDaily ? `<span class="pill-tag" style="background:rgba(139,92,246,0.12); color:#7C3AED;">🔁 Daily (${r.repeatTime})</span>` : '';
 
-  if (navKey === 'list') loadReminders();
-  if (navKey === 'admin') loadAdminDashboard();
+    return `
+      <div class="reminder-item">
+        <div class="reminder-header-row">
+          <div>
+            <div class="reminder-text">${escapeHtml(r.title)}</div>
+            ${r.message && r.message !== r.title ? `<p style="font-size:12px; color:var(--text-muted); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
+          </div>
+          <div style="display:flex; gap:4px;">
+            ${dailyBadge}
+            ${contactBadge}
+          </div>
+        </div>
+
+        <div class="reminder-meta-row">
+          <div class="reminder-time-chip">⏰ ${timeFormatted}</div>
+          <div class="reminder-actions-btns">
+            <button class="mini-btn mini-send" onclick="testPlayReminder('${r.id}')" title="Test Alarm">🔔 Ring</button>
+            <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')" title="Delete">🗑️</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
-function switchCreateMode(mode) {
-  ['quick', 'custom', 'daily', 'contact'].forEach(m => {
-    document.getElementById(`box-mode-${m}`).classList.toggle('hidden', m !== mode);
-    document.getElementById(`tab-${m}`).classList.toggle('active', m === mode);
-  });
+function testPlayReminder(id) {
+  const rem = currentReminders.find(r => r.id === id);
+  if (rem) {
+    triggerAlarmModal(rem);
+  } else {
+    playAlarmChime();
+    showToast('🔔 Alarm tested!');
+  }
+}
+
+async function deleteReminder(id) {
+  if (!confirm('Delete this reminder?')) return;
+  try {
+    const res = await fetch(`/api/reminders/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    if (res.ok) {
+      showToast('✓ Reminder deleted');
+      loadReminders();
+    }
+  } catch (e) {
+    showToast('Error deleting reminder');
+  }
 }
 
 // -------------------------------------------------------------
-// AUTHENTICATION & NEVER LOGOUT SESSION
+// AUTHENTICATION & SESSION ("NEVER LOGOUT")
 // -------------------------------------------------------------
 let authMode = 'signup';
 function switchAuthMode(mode) {
@@ -238,7 +607,7 @@ document.getElementById('auth-form').addEventListener('submit', async (e) => {
       return;
     }
 
-    // Never Logout Session: Store 365-day token in localStorage
+    // Never Logout: 365-day persistent token in localStorage
     authToken = data.token;
     localStorage.setItem('reminder_me_token', authToken);
     currentUser = data.user;
@@ -280,11 +649,37 @@ async function checkSession() {
 
 function initAppSession() {
   updateUserBadge();
-  if (currentUser && currentUser.isOwner) {
-    navAdminBtn.classList.remove('hidden');
+
+  const isOwner = currentUser && currentUser.isOwner;
+
+  // 1. Owner Navigation Control: Hide Plans tab completely for Owner
+  if (isOwner) {
+    if (navPlansBtn) navPlansBtn.classList.add('hidden');
+    if (navAdminBtn) navAdminBtn.classList.remove('hidden');
+    document.getElementById('settings-owner-card').classList.remove('hidden');
+    document.getElementById('box-owner-plan-vip').classList.remove('hidden');
+    document.getElementById('box-regular-plans').classList.add('hidden');
   } else {
-    navAdminBtn.classList.add('hidden');
+    if (navPlansBtn) navPlansBtn.classList.remove('hidden');
+    if (navAdminBtn) navAdminBtn.classList.add('hidden');
+    document.getElementById('settings-owner-card').classList.add('hidden');
+    document.getElementById('box-owner-plan-vip').classList.add('hidden');
+    document.getElementById('box-regular-plans').classList.remove('hidden');
+
+    // If user has applied lifetime/active coupon, don't show annoying payment cards
+    const isSubscribed = currentUser && (currentUser.planStatus === 'coupon_lifetime' || currentUser.planStatus === 'monthly' || currentUser.planStatus === 'yearly');
+    const userActiveBox = document.getElementById('box-user-active-vip');
+    if (isSubscribed) {
+      userActiveBox.classList.remove('hidden');
+      document.getElementById('user-active-plan-title').textContent =
+        currentUser.planStatus === 'coupon_lifetime' ? 'Lifetime VIP Access Active' : 'Subscription Active';
+      document.getElementById('btn-start-autopay').style.display = 'none';
+    } else {
+      userActiveBox.classList.add('hidden');
+      document.getElementById('btn-start-autopay').style.display = 'block';
+    }
   }
+
   document.getElementById('user-email-chip').textContent = currentUser.email;
   loadReminders();
 }
@@ -295,33 +690,35 @@ function updateUserBadge() {
 
   if (currentUser.isOwner) {
     trialText.textContent = '👑 Owner VIP';
-    trialBadge.style.background = 'rgba(15, 81, 50, 0.2)';
+    trialBadge.style.background = 'rgba(15, 81, 50, 0.15)';
+    trialBadge.style.color = '#0F5132';
+  } else if (currentUser.planStatus === 'coupon_lifetime') {
+    trialText.textContent = '✨ Lifetime VIP';
+    trialBadge.style.background = 'rgba(15, 81, 50, 0.15)';
     trialBadge.style.color = '#0F5132';
   } else if (currentUser.planStatus === 'trial') {
-    trialText.textContent = t.trialDaysLeft.replace('{days}', currentUser.trialDaysLeft || 10);
+    const days = currentUser.trialDaysRemaining || 10;
+    trialText.textContent = t.trialDaysLeft.replace('{days}', days);
+    trialBadge.style.background = 'rgba(234, 88, 12, 0.12)';
+    trialBadge.style.color = '#C2410C';
   } else {
-    trialText.textContent = `Active (${currentUser.planStatus.toUpperCase()})`;
+    trialText.textContent = '✓ Pro Member';
     trialBadge.style.background = 'rgba(15, 81, 50, 0.15)';
     trialBadge.style.color = '#0F5132';
   }
 }
 
 function logoutUser() {
-  if (!confirm('Are you sure you want to log out?')) return;
+  if (!confirm('Log out from Reminder Me?')) return;
   localStorage.removeItem('reminder_me_token');
   authToken = null;
   currentUser = null;
-  switchNav('auth');
   showToast('Logged out');
+  switchNav('auth');
 }
 
 async function deleteUserAccount() {
-  const confirmEmail = prompt('To permanently delete your account and all reminders, type your email address:');
-  if (!confirmEmail || confirmEmail.toLowerCase() !== currentUser.email.toLowerCase()) {
-    showToast('Action cancelled: Email did not match');
-    return;
-  }
-
+  if (!confirm('⚠️ Permanently delete your account and all reminders? This cannot be undone.')) return;
   try {
     const res = await fetch('/api/auth/delete-account', {
       method: 'DELETE',
@@ -331,253 +728,16 @@ async function deleteUserAccount() {
       localStorage.removeItem('reminder_me_token');
       authToken = null;
       currentUser = null;
-      switchNav('auth');
-      alert('Your account and personal data have been completely deleted.');
+      alert('Your account has been deleted.');
+      location.reload();
     }
   } catch (e) {
-    showToast('Failed to delete account');
+    showToast('Error deleting account');
   }
 }
 
 // -------------------------------------------------------------
-// REMINDER ENGINE (QUICK, CUSTOM, DAILY, CONTACT)
-// -------------------------------------------------------------
-async function quickSave(param) {
-  const input = document.getElementById('quick-input');
-  const message = input.value.trim();
-  if (!message) {
-    showToast('Please type your reminder first!');
-    input.focus();
-    return;
-  }
-
-  const body = { message };
-  if (typeof param === 'number') body.minutes = param;
-  if (typeof param === 'string') body.preset = param;
-
-  try {
-    const res = await fetch('/api/reminders/quick', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`
-      },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to save'));
-      if (res.status === 403) switchNav('subscription');
-      return;
-    }
-
-    playAlarmTone();
-    showToast(`✓ Scheduled for ${data.scheduledTime}`);
-    input.value = '';
-    loadReminders();
-    switchNav('list');
-  } catch (err) {
-    showToast('❌ Error: ' + err.message);
-  }
-}
-
-// Custom Date & Time Form
-document.getElementById('form-custom').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const title = document.getElementById('custom-title').value.trim();
-  const message = document.getElementById('custom-note').value.trim();
-  const reminderTime = document.getElementById('custom-datetime').value;
-  const priority = document.getElementById('custom-priority').value;
-
-  try {
-    const res = await fetch('/api/reminders/custom', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ title, message, reminderTime, priority })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to save'));
-      return;
-    }
-
-    playAlarmTone();
-    showToast('✓ Custom reminder saved!');
-    document.getElementById('form-custom').reset();
-    loadReminders();
-    switchNav('list');
-  } catch (err) {
-    showToast('❌ ' + err.message);
-  }
-});
-
-// Daily Recurring Form
-document.getElementById('form-daily').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const message = document.getElementById('daily-msg').value.trim();
-  const time = document.getElementById('daily-time').value;
-  const endDate = document.getElementById('daily-enddate').value;
-
-  try {
-    const res = await fetch('/api/reminders/daily', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ message, time, endDate })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to save'));
-      return;
-    }
-
-    playAlarmTone();
-    showToast('✓ Daily recurring reminder scheduled!');
-    document.getElementById('form-daily').reset();
-    loadReminders();
-    switchNav('list');
-  } catch (err) {
-    showToast('❌ ' + err.message);
-  }
-});
-
-// Remind Contact Form
-document.getElementById('form-contact').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const contactName = document.getElementById('contact-name').value.trim();
-  const contactPhone = document.getElementById('contact-phone').value.trim();
-  const message = document.getElementById('contact-msg').value.trim();
-  const reminderTime = document.getElementById('contact-datetime').value;
-
-  try {
-    const res = await fetch('/api/reminders/contact', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ contactName, contactPhone, message, reminderTime })
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast('❌ ' + (data.error || 'Failed to save'));
-      return;
-    }
-
-    playAlarmTone();
-    showToast(`✓ Reminder scheduled for ${contactName}!`);
-    document.getElementById('form-contact').reset();
-    loadReminders();
-    switchNav('list');
-  } catch (err) {
-    showToast('❌ ' + err.message);
-  }
-});
-
-// Load Reminders List
-async function loadReminders() {
-  if (!authToken) return;
-  try {
-    const res = await fetch('/api/reminders', {
-      headers: { Authorization: `Bearer ${authToken}` }
-    });
-    currentReminders = await res.json();
-    renderReminders();
-  } catch (err) {
-    console.error('Error fetching reminders:', err);
-  }
-}
-
-function renderReminders() {
-  const container = document.getElementById('reminders-container');
-  const emptyState = document.getElementById('list-empty-state');
-  const countBadge = document.getElementById('reminders-count');
-
-  countBadge.textContent = `${currentReminders.length} Active`;
-
-  if (currentReminders.length === 0) {
-    container.innerHTML = '';
-    emptyState.classList.remove('hidden');
-    return;
-  }
-
-  emptyState.classList.add('hidden');
-  container.innerHTML = currentReminders.map(r => {
-    const d = new Date(r.reminderTime);
-    const timeFormatted = d.toLocaleString(currentLang === 'hi' ? 'hi-IN' : 'en-US', {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-
-    const isDaily = r.repeat === 'daily';
-    const contactBadge = r.targetContactName ? `<span class="pill-tag" style="background:rgba(249,115,22,0.12); color:#F97316;">To: ${r.targetContactName}</span>` : '';
-    const dailyBadge = isDaily ? `<span class="pill-tag" style="background:rgba(139,92,246,0.12); color:#7C3AED;">🔁 Daily (${r.repeatTime})</span>` : '';
-
-    return `
-      <div class="reminder-item">
-        <div class="reminder-header-row">
-          <div>
-            <div class="reminder-text">${escapeHtml(r.title)}</div>
-            ${r.message && r.message !== r.title ? `<p style="font-size:12px; color:var(--text-muted); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
-          </div>
-          <div style="display:flex; gap:4px;">
-            ${dailyBadge}
-            ${contactBadge}
-          </div>
-        </div>
-
-        <div class="reminder-meta-row">
-          <div class="reminder-time-chip">⏰ ${timeFormatted}</div>
-          <div class="reminder-actions-btns">
-            <button class="mini-btn mini-send" onclick="triggerReminderNow('${r.id}')" title="Test Send">📲 Send</button>
-            <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')" title="Delete">🗑️</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-async function triggerReminderNow(id) {
-  try {
-    showToast('Sending WhatsApp & Push...');
-    const res = await fetch(`/api/reminders/${id}/trigger`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}` }
-    });
-    const data = await res.json();
-    if (res.ok) {
-      playAlarmTone();
-      showToast('✓ Alert dispatched!');
-    } else {
-      showToast('❌ ' + (data.error || 'Failed'));
-    }
-  } catch (e) {
-    showToast('Error sending reminder');
-  }
-}
-
-async function deleteReminder(id) {
-  try {
-    const res = await fetch(`/api/reminders/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${authToken}` }
-    });
-    if (res.ok) {
-      showToast('Deleted');
-      loadReminders();
-    }
-  } catch (e) {
-    showToast('Error deleting reminder');
-  }
-}
-
-// -------------------------------------------------------------
-// SUBSCRIPTION & RAZORPAY AUTOPAY
+// SUBSCRIPTIONS & COUPONS (For Normal Users)
 // -------------------------------------------------------------
 function selectPlan(plan) {
   selectedPlan = plan;
@@ -587,7 +747,7 @@ function selectPlan(plan) {
 
 async function startRazorpayAutopay() {
   try {
-    showToast('Initializing Autopay...');
+    showToast('Opening payment gateway...');
     const res = await fetch('/api/subscription/create-autopay', {
       method: 'POST',
       headers: {
@@ -605,10 +765,10 @@ async function startRazorpayAutopay() {
 
     const options = {
       key: data.keyId,
-      amount: data.amountPaise,
+      amount: data.amount,
       currency: data.currency,
       name: 'Reminder Me',
-      description: data.description,
+      description: `Autopay (${selectedPlan.toUpperCase()})`,
       image: '/icons/icon.svg',
       handler: async function (response) {
         showToast('Verifying payment...');
@@ -621,16 +781,14 @@ async function startRazorpayAutopay() {
           body: JSON.stringify({
             planType: selectedPlan,
             paymentId: response.razorpay_payment_id,
-            subscriptionId: response.razorpay_subscription_id
+            orderId: response.razorpay_order_id
           })
         });
         const verifyData = await verifyRes.json();
         if (verifyRes.ok) {
-          playAlarmTone();
+          playAlarmChime();
           showToast('🎉 ' + verifyData.message);
           checkSession();
-        } else {
-          showToast('Verification failed');
         }
       },
       prefill: {
@@ -641,14 +799,13 @@ async function startRazorpayAutopay() {
       theme: { color: '#0F5132' }
     };
 
-    // Open Razorpay Modal
     if (typeof Razorpay !== 'undefined') {
       const rzp = new Razorpay(options);
       rzp.open();
     } else {
-      // In sandbox/testing mode if razorpay script not loaded:
+      // Simulation fallback for sandbox
       const mockPayId = 'pay_' + Date.now();
-      const verifyRes = await fetch('/api/subscription/verify-autopay', {
+      await fetch('/api/subscription/verify-autopay', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -656,7 +813,7 @@ async function startRazorpayAutopay() {
         },
         body: JSON.stringify({ planType: selectedPlan, paymentId: mockPayId })
       });
-      showToast('✓ Autopay subscription activated (Simulated)');
+      showToast('✓ Autopay subscription activated (Test Mode)');
       checkSession();
     }
   } catch (err) {
@@ -682,7 +839,7 @@ async function applyCouponCode() {
     });
     const data = await res.json();
     if (res.ok) {
-      playAlarmTone();
+      playAlarmChime();
       showToast('🎉 ' + data.message);
       document.getElementById('coupon-input').value = '';
       checkSession();
@@ -711,7 +868,7 @@ async function enablePushNotifications() {
     }
 
     const reg = await navigator.serviceWorker.ready;
-    const vapidRes = await fetch('/api/push/vapid-key');
+    const vapidRes = await fetch('/api/push/public-key');
     const { publicKey } = await vapidRes.json();
 
     const sub = await reg.pushManager.subscribe({
@@ -728,7 +885,7 @@ async function enablePushNotifications() {
       body: JSON.stringify({ subscription: sub })
     });
 
-    playAlarmTone();
+    playAlarmChime();
     showToast('🔔 Lock-screen notifications enabled!');
   } catch (err) {
     showToast('Push setup error: ' + err.message);
@@ -750,55 +907,32 @@ function urlB64ToUint8Array(base64String) {
 // EXCLUSIVE OWNER ADMIN PANEL
 // -------------------------------------------------------------
 async function loadAdminDashboard() {
-  if (!currentUser || !currentUser.isOwner) return;
-
+  if (!authToken || !currentUser || !currentUser.isOwner) return;
   try {
     const res = await fetch('/api/admin/stats', {
       headers: { Authorization: `Bearer ${authToken}` }
     });
-    const data = await res.json();
     if (!res.ok) return;
+    const data = await res.json();
 
     document.getElementById('stat-total-users').textContent = data.stats.totalUsers;
     document.getElementById('stat-active-trials').textContent = data.stats.activeTrials;
     document.getElementById('stat-autopay-users').textContent = data.stats.activeAutopay;
-    document.getElementById('stat-revenue').textContent = `₹${data.stats.totalRevenue}`;
+    document.getElementById('stat-revenue').textContent = '₹' + data.stats.totalRevenue;
 
     const tbody = document.getElementById('admin-users-tbody');
     tbody.innerHTML = data.users.map(u => `
       <tr>
-        <td><strong>${escapeHtml(u.fullName)}</strong></td>
+        <td><strong>${escapeHtml(u.fullName)}</strong>${u.isOwner ? ' 👑' : ''}</td>
         <td>${escapeHtml(u.email)}</td>
         <td>${escapeHtml(u.phone)}</td>
-        <td><span class="pill-tag" style="font-size:10px;">${u.planStatus.toUpperCase()}</span></td>
-        <td>${u.subscriptionExpiresAt ? new Date(u.subscriptionExpiresAt).toLocaleDateString() : (u.isOwner ? 'VIP Lifetime' : '10-Day Trial')}</td>
+        <td><span class="pill-tag" style="font-size:10px;">${u.planStatus}</span></td>
+        <td>${u.subscriptionExpiresAt ? new Date(u.subscriptionExpiresAt).toLocaleDateString() : 'Trial'}</td>
       </tr>
     `).join('');
-
-    checkAdminWhatsAppStatus();
   } catch (err) {
     console.error('Admin dashboard error:', err);
   }
-}
-
-async function checkAdminWhatsAppStatus() {
-  try {
-    const res = await fetch('/api/whatsapp/status');
-    const data = await res.json();
-    const statusText = document.getElementById('admin-wa-status');
-    const qrImg = document.getElementById('admin-wa-qr');
-
-    if (data.isConnected) {
-      statusText.innerHTML = `🟢 <strong>Connected as:</strong> +${data.phone}`;
-      qrImg.style.display = 'none';
-    } else {
-      statusText.innerHTML = '⚠️ <strong>WhatsApp Disconnected.</strong> Scan QR below:';
-      if (data.qrImage) {
-        qrImg.src = data.qrImage;
-        qrImg.style.display = 'block';
-      }
-    }
-  } catch (e) {}
 }
 
 async function generateAdminCoupons() {
@@ -815,8 +949,8 @@ async function generateAdminCoupons() {
     const data = await res.json();
     if (res.ok) {
       document.getElementById('admin-generated-codes').innerHTML =
-        '<strong>New Codes:</strong><br>' + data.createdCodes.join('<br>');
-      showToast('Generated 3 single-use coupons');
+        '<strong>New Codes:</strong><br>' + data.codes.join('<br>');
+      showToast('✓ Generated 3 single-use coupons');
     }
   } catch (e) {
     showToast('Error generating coupons');
@@ -849,7 +983,7 @@ function exportAdminDataCSV() {
 function shareReminderMeApp() {
   const shareData = {
     title: 'Reminder Me',
-    text: 'Try Reminder Me - Get automated task & medicine reminders directly on your WhatsApp and Lock Screen!',
+    text: 'Try Reminder Me - Smart task, medicine & daily reminders with loud in-app alarms and push alerts!',
     url: window.location.origin
   };
 

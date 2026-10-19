@@ -288,29 +288,38 @@ const dbAsync = {
 
     // 12. INSERT INTO reminders
     if (s.startsWith('insert into reminders')) {
-      const [id, userId, title, message, reminderTime, repeat, repeatTime, endDate, priority, category, targetContactPhone, targetContactName, status, sentCount, createdAt] = params;
+      const colMatch = sql.match(/insert\s+into\s+reminders\s*\(([^)]+)\)/i);
       const newReminder = {
-        id,
-        userId,
-        title,
-        message,
-        reminderTime,
-        repeat: repeat || 'none',
-        repeatTime: repeatTime || null,
-        endDate: endDate || null,
-        priority: priority || 'normal',
-        category: category || 'personal',
-        targetContactPhone: targetContactPhone || null,
-        targetContactName: targetContactName || null,
-        status: status || 'pending',
-        sentCount: sentCount || 0,
-        createdAt: createdAt || new Date().toISOString(),
+        id: null,
+        userId: null,
+        title: '',
+        message: '',
+        reminderTime: null,
+        repeat: 'none',
+        repeatTime: null,
+        endDate: null,
+        priority: 'normal',
+        category: 'personal',
+        targetContactPhone: null,
+        targetContactName: null,
+        status: 'pending',
+        sentCount: 0,
+        createdAt: new Date().toISOString(),
         sentAt: null,
         error: null
       };
+
+      if (colMatch) {
+        const cols = colMatch[1].split(',').map(c => c.trim());
+        cols.forEach((col, idx) => {
+          if (idx < params.length) {
+            newReminder[col] = params[idx];
+          }
+        });
+      }
       memoryDb.reminders.push(newReminder);
       saveDatabase();
-      return { lastID: id, changes: 1 };
+      return { lastID: newReminder.id, changes: 1 };
     }
 
     // 13. DELETE FROM reminders WHERE id = ? AND userId = ?

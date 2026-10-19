@@ -639,3 +639,111 @@ body {
 .mt-2 { margin-top: 8px; }
 .mt-3 { margin-top: 14px; }
 .mt-4 { margin-top: 20px; }
+
+/* In-App Alarm Popup Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 28, 30, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.alarm-dialog-card {
+  width: 100%;
+  max-width: 360px;
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: var(--radius-card);
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  border: 1px solid var(--glass-border);
+  animation: popUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.alarm-bell-icon {
+  font-size: 48px;
+  display: inline-block;
+  animation: ringBell 1s infinite alternate ease-in-out;
+  margin-bottom: 8px;
+}
+
+.alarm-time-tag {
+  display: inline-block;
+  background: rgba(15, 81, 50, 0.12);
+  color: var(--forest-green);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 12px;
+}
+
+.alarm-title {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin-bottom: 6px;
+}
+
+.alarm-message {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+
+.alarm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* VIP Owner Card */
+.vip-owner-card {
+  background: linear-gradient(135deg, rgba(15, 81, 50, 0.15), rgba(244, 239, 234, 0.95));
+  border: 1.5px solid rgba(15, 81, 50, 0.35);
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.vip-owner-icon {
+  font-size: 32px;
+}
+
+.vip-owner-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--forest-green);
+}
+
+.vip-owner-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+@keyframes ringBell {
+  0% { transform: rotate(-15deg); }
+  100% { transform: rotate(15deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes popUp {
+  from { transform: scale(0.9) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+

@@ -1,6 +1,88 @@
 {
-  "users": [],
-  "reminders": [],
+  "users": [
+    {
+      "id": "usr_1792423491773_gt42ls",
+      "fullName": "Ramesh Sharma",
+      "email": "ramesh_1792423491603@example.com",
+      "phone": "919876543210",
+      "passwordHash": "$2b$10$Kjm3I1oF5F7ToAmw2WQYEeaZ2CQjOc2mGkE.EzEXftHTdHVGdyVea",
+      "planStatus": "monthly",
+      "trialEndsAt": "2026-10-29T15:24:51.773Z",
+      "subscriptionExpiresAt": "2026-11-19T15:24:51.786Z",
+      "isOwner": 0,
+      "createdAt": "2026-10-19T15:24:51.773Z",
+      "razorpaySubscriptionId": null,
+      "lastLoginAt": "2026-10-19T15:24:51.773Z"
+    },
+    {
+      "id": "usr_1792423491910_iuo295",
+      "fullName": "Deepak Prajapat",
+      "email": "deepakprajapat8529@gmail.com",
+      "phone": "919876500000",
+      "passwordHash": "$2b$10$tRbDyP4USX5qHjcaFa1C/On2UBjWuTsnAvVoaf1VSKR7Y1M5ye06S",
+      "planStatus": "owner",
+      "trialEndsAt": "2026-10-29T15:24:51.910Z",
+      "subscriptionExpiresAt": null,
+      "isOwner": 1,
+      "createdAt": "2026-10-19T15:24:51.910Z",
+      "razorpaySubscriptionId": null,
+      "lastLoginAt": "2026-10-19T15:47:20.254Z"
+    },
+    {
+      "id": "usr_1792423578094_0ww921",
+      "fullName": "Ramesh Sharma",
+      "email": "ramesh_1792423577971@example.com",
+      "phone": "919876543210",
+      "passwordHash": "$2b$10$rucXav7BmO7A.yToMMtDbumwVCDNr4/qBegjwUBoI0h2MNNX1Vv5e",
+      "planStatus": "monthly",
+      "trialEndsAt": "2026-10-29T15:26:18.094Z",
+      "subscriptionExpiresAt": "2026-11-19T15:26:18.104Z",
+      "isOwner": 0,
+      "createdAt": "2026-10-19T15:26:18.094Z",
+      "razorpaySubscriptionId": null,
+      "lastLoginAt": "2026-10-19T15:26:18.094Z"
+    }
+  ],
+  "reminders": [
+    {
+      "id": "rem_1792423578108_a1ur2",
+      "userId": "usr_1792423578094_0ww921",
+      "title": "Call client about project",
+      "message": "Call client about project",
+      "reminderTime": "2026-10-19T15:56:18.108Z",
+      "repeat": "2026-10-19T15:26:18.108Z",
+      "repeatTime": null,
+      "endDate": null,
+      "priority": "normal",
+      "category": "personal",
+      "targetContactPhone": null,
+      "targetContactName": null,
+      "status": "pending",
+      "sentCount": 0,
+      "createdAt": "2026-10-19T15:26:18.109Z",
+      "sentAt": null,
+      "error": null
+    },
+    {
+      "id": "rem_1792424840291_pnzf8",
+      "userId": "usr_1792423491910_iuo295",
+      "title": "Drink water",
+      "message": "Drink water",
+      "reminderTime": "2026-10-19T15:47:20.291Z",
+      "repeat": "2026-10-19T15:47:20.291Z",
+      "repeatTime": null,
+      "endDate": null,
+      "priority": "normal",
+      "category": "personal",
+      "targetContactPhone": null,
+      "targetContactName": null,
+      "status": "pending",
+      "sentCount": 0,
+      "createdAt": "2026-10-19T15:47:20.291Z",
+      "sentAt": null,
+      "error": null
+    }
+  ],
   "coupons": [
     {
       "code": "OWNER-LIFETIME-VIP",
@@ -12,16 +94,16 @@
     {
       "code": "FREE1M-REMIND01",
       "planType": "1month",
-      "isUsed": 0,
-      "usedByUserId": null,
-      "usedAt": null
+      "isUsed": 1,
+      "usedByUserId": "usr_1792423491773_gt42ls",
+      "usedAt": "2026-10-19T15:24:51.786Z"
     },
     {
       "code": "FREE1M-REMIND02",
       "planType": "1month",
-      "isUsed": 0,
-      "usedByUserId": null,
-      "usedAt": null
+      "isUsed": 1,
+      "usedByUserId": "usr_1792423578094_0ww921",
+      "usedAt": "2026-10-19T15:26:18.104Z"
     },
     {
       "code": "FREE1M-REMIND03",

@@ -2,14 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Razorpay = require('razorpay');
 const webpush = require('web-push');
-const QRCode = require('qrcode');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const pino = require('pino');
 const { dbAsync } = require('./db');
 
 const app = express();
@@ -17,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'reminder_me_super_secret_jwt_key_2026';
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || 'deepakprajapat8529@gmail.com').toLowerCase().trim();
 
-// Razorpay Config (Keys from env or fallback test mode)
+// Razorpay Config (Keys from env or fallback placeholder)
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder_id',
   key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_placeholder_secret'
@@ -39,14 +35,6 @@ const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
-const AUTH_DIR = path.join(DATA_DIR, 'auth_baileys');
-
-// WhatsApp State Variables
-let sock = null;
-let currentQR = null;
-let currentQRImage = null;
-let isWAConnected = false;
-let loggedInUserWA = '';
 
 function sanitizePhone(phone) {
   if (!phone) return '';
@@ -55,80 +43,6 @@ function sanitizePhone(phone) {
     cleaned = '91' + cleaned;
   }
   return cleaned;
-}
-
-// WhatsApp Baileys Connection
-async function startWhatsAppBot() {
-  try {
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-
-    sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: true,
-      logger: pino({ level: 'silent' }),
-      browser: ['Reminder Me App', 'Chrome', '1.0.0']
-    });
-
-    sock.ev.on('connection.update', async (update) => {
-      const { connection, lastDisconnect, qr } = update;
-
-      if (qr) {
-        currentQR = qr;
-        try {
-          currentQRImage = await QRCode.toDataURL(qr, {
-            width: 280,
-            margin: 2,
-            color: { dark: '#0F5132', light: '#FFFFFF' }
-          });
-        } catch (qrErr) {
-          console.error('[WhatsApp] QR generation error:', qrErr);
-        }
-      }
-
-      if (connection === 'close') {
-        const statusCode = (lastDisconnect?.error)?.output?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-        isWAConnected = false;
-        currentQR = null;
-        currentQRImage = null;
-
-        if (statusCode === DisconnectReason.loggedOut) {
-          try {
-            fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-          } catch (e) {}
-        }
-
-        if (shouldReconnect) {
-          setTimeout(startWhatsAppBot, 3000);
-        }
-      } else if (connection === 'open') {
-        isWAConnected = true;
-        currentQR = null;
-        currentQRImage = null;
-        const userJid = sock.user?.id || '';
-        loggedInUserWA = userJid.split(':')[0] || userJid.split('@')[0];
-        console.log(`[WhatsApp] Ready as +${loggedInUserWA}`);
-      }
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-  } catch (err) {
-    console.error('[WhatsApp] Init error:', err);
-    setTimeout(startWhatsAppBot, 5000);
-  }
-}
-startWhatsAppBot();
-
-// Unified Send WhatsApp Message Handler
-async function sendAnyWhatsAppMessage(targetPhone, message) {
-  if (isWAConnected && sock) {
-    const clean = sanitizePhone(targetPhone) || loggedInUserWA;
-    const recipientJid = `${clean}@s.whatsapp.net`;
-    console.log(`[WhatsApp] Sending to ${recipientJid}...`);
-    await sock.sendMessage(recipientJid, { text: message });
-    return { method: 'direct', recipient: clean };
-  }
-  throw new Error('WhatsApp is not connected in admin panel!');
 }
 
 // Send Web Push Notification to User
@@ -150,71 +64,75 @@ async function sendWebPushToUser(userId, payload) {
       }
     }
   } catch (err) {
-    console.error('Error dispatching web push:', err);
+    console.error('[WebPush] Error sending push to user:', err.message);
   }
 }
 
-// JWT Authentication Middleware
+// -------------------------------------------------------------
+// AUTH & SESSION MIDDLEWARE
+// -------------------------------------------------------------
 async function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: Missing token' });
+  }
+
+  const token = authHeader.split(' ')[1];
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [decoded.userId]);
     if (!user) {
-      return res.status(401).json({ error: 'User session not found' });
-    }
-
-    // Check Plan Status / Trial Expired
-    const now = new Date();
-    const isOwner = user.email.toLowerCase() === OWNER_EMAIL || user.isOwner === 1;
-
-    let hasActiveAccess = true;
-    let trialDaysLeft = 0;
-
-    if (isOwner) {
-      hasActiveAccess = true;
-    } else if (user.planStatus === 'trial') {
-      const trialEnds = new Date(user.trialEndsAt);
-      if (now > trialEnds) {
-        hasActiveAccess = false;
-        trialDaysLeft = 0;
-      } else {
-        trialDaysLeft = Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24));
-        hasActiveAccess = true;
-      }
-    } else if (['monthly', 'yearly', 'coupon_lifetime', 'owner'].includes(user.planStatus)) {
-      if (user.subscriptionExpiresAt) {
-        const expires = new Date(user.subscriptionExpiresAt);
-        if (now > expires) {
-          hasActiveAccess = false;
-        }
-      }
+      return res.status(401).json({ error: 'User account not found' });
     }
 
     req.user = user;
+    const isOwner = user.email.toLowerCase().trim() === OWNER_EMAIL || user.isOwner === 1;
     req.isOwner = isOwner;
+
+    // Check Plan & Access
+    let hasActiveAccess = false;
+    let trialDaysRemaining = 0;
+    const now = new Date();
+
+    if (isOwner) {
+      hasActiveAccess = true;
+    } else if (['coupon_lifetime', 'monthly', 'yearly'].includes(user.planStatus)) {
+      if (user.planStatus === 'coupon_lifetime') {
+        hasActiveAccess = true;
+      } else if (user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt) > now) {
+        hasActiveAccess = true;
+      } else {
+        hasActiveAccess = false;
+      }
+    } else if (user.planStatus === 'trial') {
+      const trialEnds = new Date(user.trialEndsAt);
+      if (trialEnds > now) {
+        hasActiveAccess = true;
+        trialDaysRemaining = Math.max(0, Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24)));
+      } else {
+        hasActiveAccess = false;
+        trialDaysRemaining = 0;
+      }
+    }
+
     req.hasActiveAccess = hasActiveAccess;
-    req.trialDaysLeft = trialDaysLeft;
+    req.trialDaysRemaining = trialDaysRemaining;
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired session token' });
+    return res.status(401).json({ error: 'Session expired or invalid token' });
   }
 }
 
-// Require Owner Middleware
+// Owner Middleware
 function ownerMiddleware(req, res, next) {
   if (!req.isOwner) {
-    return res.status(403).json({ error: 'Access denied: Owner privileges required' });
+    return res.status(403).json({ error: 'Forbidden: Owner access only' });
   }
   next();
 }
 
 // -------------------------------------------------------------
-// AUTH & USER ROUTES
+// AUTH ROUTES
 // -------------------------------------------------------------
 
 // Sign Up
@@ -242,7 +160,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const isOwner = cleanEmail === OWNER_EMAIL;
     const now = new Date();
-    const trialEnds = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000); // Strict 10-day trial
+    const trialEnds = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000); // 10-day trial
 
     const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const planStatus = isOwner ? 'owner' : 'trial';
@@ -276,13 +194,14 @@ app.post('/api/auth/signup', async (req, res) => {
         email: cleanEmail,
         phone: cleanPhone,
         planStatus,
-        trialEndsAt: trialEnds.toISOString(),
-        trialDaysLeft: 10,
         isOwner,
-        hasActiveAccess: true
+        lifetimeFree: isOwner,
+        trialDaysRemaining: isOwner ? 9999 : 10,
+        trialEndsAt: trialEnds.toISOString()
       }
     });
   } catch (err) {
+    console.error('[Auth Signup Error]:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -292,47 +211,42 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and Password are required' });
+      return res.status(400).json({ error: 'Email and App Password required' });
     }
 
     const cleanEmail = email.toLowerCase().trim();
     const user = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+
     if (!user) {
       return res.status(400).json({ error: 'Invalid Email or Password' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) {
+    const match = await bcrypt.compare(password, user.passwordHash);
+    if (!match) {
       return res.status(400).json({ error: 'Invalid Email or Password' });
     }
 
-    // Update last login
+    const isOwner = cleanEmail === OWNER_EMAIL || user.isOwner === 1;
     await dbAsync.run('UPDATE users SET lastLoginAt = ? WHERE id = ?', [new Date().toISOString(), user.id]);
 
-    const isOwner = cleanEmail === OWNER_EMAIL || user.isOwner === 1;
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '365d' });
+
     const now = new Date();
-    let hasActiveAccess = true;
-    let trialDaysLeft = 0;
+    let trialDaysRemaining = 0;
+    let hasActiveAccess = false;
 
     if (isOwner) {
       hasActiveAccess = true;
+      trialDaysRemaining = 9999;
+    } else if (['coupon_lifetime', 'monthly', 'yearly'].includes(user.planStatus)) {
+      hasActiveAccess = true;
     } else if (user.planStatus === 'trial') {
       const trialEnds = new Date(user.trialEndsAt);
-      if (now > trialEnds) {
-        hasActiveAccess = false;
-        trialDaysLeft = 0;
-      } else {
-        trialDaysLeft = Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24));
+      if (trialEnds > now) {
         hasActiveAccess = true;
-      }
-    } else if (['monthly', 'yearly', 'coupon_lifetime', 'owner'].includes(user.planStatus)) {
-      if (user.subscriptionExpiresAt) {
-        hasActiveAccess = now <= new Date(user.subscriptionExpiresAt);
+        trialDaysRemaining = Math.max(0, Math.ceil((trialEnds - now) / (1000 * 60 * 60 * 24)));
       }
     }
-
-    // Persistent 365-day token
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '365d' });
 
     res.json({
       success: true,
@@ -342,11 +256,13 @@ app.post('/api/auth/login', async (req, res) => {
         fullName: user.fullName,
         email: user.email,
         phone: user.phone,
-        planStatus: user.planStatus,
-        trialEndsAt: user.trialEndsAt,
-        trialDaysLeft,
+        planStatus: isOwner ? 'owner' : user.planStatus,
         isOwner,
-        hasActiveAccess
+        lifetimeFree: isOwner || user.planStatus === 'coupon_lifetime',
+        hasActiveAccess,
+        trialDaysRemaining,
+        trialEndsAt: user.trialEndsAt,
+        subscriptionExpiresAt: user.subscriptionExpiresAt
       }
     });
   } catch (err) {
@@ -354,20 +270,21 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Get Current User Profile & Subscription Status
-app.get('/api/auth/me', authMiddleware, (req, res) => {
+// Check Session / Current User
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
   res.json({
     user: {
       id: req.user.id,
       fullName: req.user.fullName,
       email: req.user.email,
       phone: req.user.phone,
-      planStatus: req.user.planStatus,
-      trialEndsAt: req.user.trialEndsAt,
-      trialDaysLeft: req.trialDaysLeft,
-      subscriptionExpiresAt: req.user.subscriptionExpiresAt,
+      planStatus: req.isOwner ? 'owner' : req.user.planStatus,
       isOwner: req.isOwner,
-      hasActiveAccess: req.hasActiveAccess
+      lifetimeFree: req.isOwner || req.user.planStatus === 'coupon_lifetime',
+      hasActiveAccess: req.hasActiveAccess,
+      trialDaysRemaining: req.trialDaysRemaining,
+      trialEndsAt: req.user.trialEndsAt,
+      subscriptionExpiresAt: req.user.subscriptionExpiresAt
     }
   });
 });
@@ -379,124 +296,129 @@ app.delete('/api/auth/delete-account', authMiddleware, async (req, res) => {
     await dbAsync.run('DELETE FROM reminders WHERE userId = ?', [userId]);
     await dbAsync.run('DELETE FROM push_subscriptions WHERE userId = ?', [userId]);
     await dbAsync.run('DELETE FROM users WHERE id = ?', [userId]);
-    res.json({ success: true, message: 'Your account and personal data have been completely deleted.' });
+    res.json({ success: true, message: 'Your account and all associated data have been permanently deleted.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // -------------------------------------------------------------
-// SUBSCRIPTIONS & COUPON ROUTES
+// SUBSCRIPTIONS & COUPON SYSTEM
 // -------------------------------------------------------------
 
-// Apply Coupon Code
+// Single-use Coupon Apply
 app.post('/api/subscription/apply-coupon', authMiddleware, async (req, res) => {
   try {
     const { code } = req.body;
-    if (!code) {
+    if (!code || !code.trim()) {
       return res.status(400).json({ error: 'Please enter a coupon code' });
     }
 
-    const cleanCode = code.toUpperCase().trim();
+    const cleanCode = code.trim().toUpperCase();
     const coupon = await dbAsync.get('SELECT * FROM coupons WHERE code = ?', [cleanCode]);
 
     if (!coupon) {
       return res.status(400).json({ error: 'Invalid coupon code' });
     }
-    if (coupon.isUsed && cleanCode !== 'OWNER-LIFETIME-VIP') {
-      return res.status(400).json({ error: 'This coupon code has already been used' });
+    if (coupon.isUsed === 1) {
+      return res.status(400).json({ error: 'This coupon has already been used' });
     }
 
     const now = new Date();
     let newPlan = 'monthly';
-    let expiresAt = new Date();
+    let expiresAt = null;
 
-    if (coupon.planType === '1month') {
-      newPlan = 'monthly';
-      expiresAt.setMonth(expiresAt.getMonth() + 1);
+    if (coupon.planType === 'lifetime' || cleanCode === 'OWNER-LIFETIME-VIP') {
+      newPlan = 'coupon_lifetime';
+      expiresAt = new Date(now.getTime() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString();
     } else if (coupon.planType === '1year') {
       newPlan = 'yearly';
-      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-    } else if (coupon.planType === 'lifetime') {
-      newPlan = 'coupon_lifetime';
-      expiresAt = null;
+      expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    } else {
+      newPlan = 'monthly';
+      expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     }
 
-    // Mark coupon as used (unless owner vip reusable)
-    if (cleanCode !== 'OWNER-LIFETIME-VIP') {
-      await dbAsync.run('UPDATE coupons SET isUsed = 1, usedByUserId = ?, usedAt = ? WHERE code = ?', [
-        req.user.id,
-        now.toISOString(),
-        cleanCode
-      ]);
-    }
+    await dbAsync.run('UPDATE coupons SET isUsed = 1, usedByUserId = ?, usedAt = ? WHERE code = ?', [
+      req.user.id,
+      now.toISOString(),
+      cleanCode
+    ]);
 
     await dbAsync.run(`
       UPDATE users SET planStatus = ?, subscriptionExpiresAt = ? WHERE id = ?
-    `, [newPlan, expiresAt ? expiresAt.toISOString() : null, req.user.id]);
+    `, [newPlan, expiresAt, req.user.id]);
 
     res.json({
       success: true,
       message: `Coupon applied successfully! Plan upgraded to ${newPlan.toUpperCase()}`,
       planStatus: newPlan,
-      expiresAt: expiresAt ? expiresAt.toISOString() : 'Lifetime'
+      expiresAt
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Razorpay Create Autopay Subscription (Pass-Through Rasta 1: ₹20.50/mo, ₹154/yr)
+// Razorpay Autopay Order / Mandate Creation
 app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) => {
   try {
     const { planType } = req.body; // 'monthly' (₹20.50) or 'yearly' (₹154.00)
-    
-    // In production with live Razorpay keys, this creates subscription or order
-    // Plan prices in paise:
-    // Monthly: 2050 (₹20.50)
-    // Yearly: 15400 (₹154.00)
-    const amountPaise = planType === 'yearly' ? 15400 : 2050;
+    let amountPaise = 2050; // ₹20.50
+    if (planType === 'yearly') amountPaise = 15400; // ₹154.00
 
-    // For test / simulated integration:
-    const mockSubId = 'sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const options = {
+      amount: amountPaise,
+      currency: 'INR',
+      receipt: `rcpt_${req.user.id.substring(0, 8)}_${Date.now()}`,
+      notes: {
+        userId: req.user.id,
+        userEmail: req.user.email,
+        planType
+      }
+    };
+
+    let order = null;
+    try {
+      order = await razorpay.orders.create(options);
+    } catch (rzpErr) {
+      order = {
+        id: 'order_simulated_' + Date.now(),
+        amount: amountPaise,
+        currency: 'INR',
+        receipt: options.receipt
+      };
+    }
 
     res.json({
-      success: true,
-      subscriptionId: mockSubId,
-      amountPaise,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
       keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder_id',
-      planType,
-      currency: 'INR',
-      name: 'Reminder Me Autopay',
-      description: planType === 'yearly' ? 'Yearly Autopay (₹154.00/yr)' : 'Monthly Autopay (₹20.50/mo)'
+      planType
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Razorpay Verify & Activate Subscription
+// Razorpay Autopay Verification
 app.post('/api/subscription/verify-autopay', authMiddleware, async (req, res) => {
   try {
-    const { planType, paymentId, subscriptionId } = req.body;
+    const { orderId, paymentId, planType } = req.body;
     const now = new Date();
-    let expiresAt = new Date();
-
-    if (planType === 'yearly') {
-      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-    } else {
-      expiresAt.setMonth(expiresAt.getMonth() + 1);
-    }
+    const durationDays = planType === 'yearly' ? 365 : 30;
+    const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();
 
     await dbAsync.run(`
       UPDATE users SET planStatus = ?, subscriptionExpiresAt = ?, razorpaySubscriptionId = ? WHERE id = ?
-    `, [planType, expiresAt.toISOString(), subscriptionId || paymentId || 'manual', req.user.id]);
+    `, [planType, expiresAt, paymentId || orderId, req.user.id]);
 
     res.json({
       success: true,
-      message: 'Autopay subscription activated successfully!',
+      message: `Subscription activated! Active until ${new Date(expiresAt).toDateString()}`,
       planStatus: planType,
-      expiresAt: expiresAt.toISOString()
+      expiresAt
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -504,10 +426,10 @@ app.post('/api/subscription/verify-autopay', authMiddleware, async (req, res) =>
 });
 
 // -------------------------------------------------------------
-// REMINDER ENGINE ROUTES (3 MODES + REMIND CONTACT)
+// REMINDER ENGINE (In-App & Push Notifications)
 // -------------------------------------------------------------
 
-// 1. Get User Reminders
+// 1. Fetch All User Reminders
 app.get('/api/reminders', authMiddleware, async (req, res) => {
   try {
     const reminders = await dbAsync.all(
@@ -520,7 +442,23 @@ app.get('/api/reminders', authMiddleware, async (req, res) => {
   }
 });
 
-// 2. Mode 1: Quick Tap Save
+// 2. Poll In-App Due Notifications (Active browser tab alarm & popup)
+app.get('/api/reminders/due-notifications', authMiddleware, async (req, res) => {
+  try {
+    const now = new Date();
+    // Check reminders due in the last 2 minutes or pending & <= now
+    const dueReminders = await dbAsync.all(
+      `SELECT * FROM reminders WHERE userId = ? AND status = 'pending' AND reminderTime <= ?`,
+      [req.user.id, now.toISOString()]
+    );
+
+    res.json({ due: dueReminders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Mode 1: Quick Tap Save
 app.post('/api/reminders/quick', authMiddleware, async (req, res) => {
   try {
     if (!req.hasActiveAccess) {
@@ -569,16 +507,24 @@ app.post('/api/reminders/quick', authMiddleware, async (req, res) => {
   }
 });
 
-// 3. Mode 2: Custom Date & Time
+// 4. Mode 2: Custom Date & Time
 app.post('/api/reminders/custom', authMiddleware, async (req, res) => {
   try {
     if (!req.hasActiveAccess) {
       return res.status(403).json({ error: 'Your 10-day trial has ended. Please subscribe or apply coupon.' });
     }
 
-    const { title, message, reminderTime, priority, category } = req.body;
-    if (!title || !reminderTime) {
-      return res.status(400).json({ error: 'Title and Date/Time are required' });
+    const { title, note, date, time, priority, category, repeat } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!date || !time) {
+      return res.status(400).json({ error: 'Date and Time are required' });
+    }
+
+    const reminderDateTime = new Date(`${date}T${time}`);
+    if (isNaN(reminderDateTime.getTime())) {
+      return res.status(400).json({ error: 'Invalid date or time' });
     }
 
     const reminderId = 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -586,85 +532,172 @@ app.post('/api/reminders/custom', authMiddleware, async (req, res) => {
 
     await dbAsync.run(`
       INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, priority, category, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, 'none', ?, ?, 'pending', ?)
-    `, [reminderId, req.user.id, title.trim(), (message || title).trim(), new Date(reminderTime).toISOString(), priority || 'normal', category || 'personal', now]);
-
-    res.status(201).json({ success: true, reminderId });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 4. Mode 3: Rozana (Daily Until Fixed Date)
-app.post('/api/reminders/daily', authMiddleware, async (req, res) => {
-  try {
-    if (!req.hasActiveAccess) {
-      return res.status(403).json({ error: 'Your 10-day trial has ended. Please subscribe or apply coupon.' });
-    }
-
-    const { message, time, endDate, priority } = req.body;
-    if (!message || !time) {
-      return res.status(400).json({ error: 'Message and Daily Time are required' });
-    }
-
-    const [hours, minutes] = time.split(':').map(Number);
-    const now = new Date();
-    let scheduledDate = new Date();
-    scheduledDate.setHours(hours, minutes, 0, 0);
-    if (scheduledDate <= now) {
-      scheduledDate.setDate(scheduledDate.getDate() + 1);
-    }
-
-    let parsedEndDate = null;
-    if (endDate && endDate.trim()) {
-      const endD = new Date(endDate);
-      endD.setHours(23, 59, 59, 999);
-      parsedEndDate = endD.toISOString();
-    }
-
-    const reminderId = 'rem_daily_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-    await dbAsync.run(`
-      INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, repeatTime, endDate, priority, category, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, 'daily', ?, ?, ?, 'personal', 'pending', ?)
-    `, [reminderId, req.user.id, message.trim(), message.trim(), scheduledDate.toISOString(), time, parsedEndDate, priority || 'normal', now.toISOString()]);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `, [
+      reminderId,
+      req.user.id,
+      title.trim(),
+      (note || '').trim(),
+      reminderDateTime.toISOString(),
+      repeat || 'none',
+      priority || 'normal',
+      category || 'personal',
+      now
+    ]);
 
     res.status(201).json({
       success: true,
-      message: `Daily reminder set for ${time}! Next run: ${scheduledDate.toLocaleTimeString()}`
+      reminderId,
+      scheduledTime: reminderDateTime.toLocaleString()
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 5. Mode 4: Remind a Contact ("Kisi Aur Ko Yaad Dilao")
+// 5. Mode 3: Rozana (Daily Repetition Until End Date)
+app.post('/api/reminders/daily', authMiddleware, async (req, res) => {
+  try {
+    if (!req.hasActiveAccess) {
+      return res.status(403).json({ error: 'Your 10-day trial has ended. Please subscribe or apply coupon.' });
+    }
+
+    const { title, note, time, kisDateTak, priority } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    if (!time) {
+      return res.status(400).json({ error: 'Time is required' });
+    }
+
+    const [hours, minutes] = time.split(':');
+    const firstReminderTime = new Date();
+    firstReminderTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+
+    if (firstReminderTime < new Date()) {
+      firstReminderTime.setDate(firstReminderTime.getDate() + 1);
+    }
+
+    const reminderId = 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    const now = new Date().toISOString();
+
+    await dbAsync.run(`
+      INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, repeatTime, endDate, priority, category, status, createdAt)
+      VALUES (?, ?, ?, ?, ?, 'daily', ?, ?, ?, 'personal', 'pending', ?)
+    `, [
+      reminderId,
+      req.user.id,
+      title.trim(),
+      (note || '').trim(),
+      firstReminderTime.toISOString(),
+      time,
+      (kisDateTak || '').trim() || null,
+      priority || 'normal',
+      now
+    ]);
+
+    res.status(201).json({
+      success: true,
+      reminderId,
+      scheduledTime: `Daily at ${time}` + (kisDateTak ? ` until ${kisDateTak}` : '')
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Mode 4: Remind a Contact
 app.post('/api/reminders/contact', authMiddleware, async (req, res) => {
   try {
     if (!req.hasActiveAccess) {
       return res.status(403).json({ error: 'Your 10-day trial has ended. Please subscribe or apply coupon.' });
     }
 
-    const { contactName, contactPhone, message, reminderTime } = req.body;
-    if (!contactPhone || !message || !reminderTime) {
-      return res.status(400).json({ error: 'Contact phone, message, and time are required' });
+    const { title, note, phone, contactName, date, time } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: 'Title / Message is required' });
     }
 
-    const cleanContactPhone = sanitizePhone(contactPhone);
-    const reminderId = 'rem_ct_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    let targetDate = new Date();
+    if (date && time) {
+      targetDate = new Date(`${date}T${time}`);
+    } else {
+      targetDate = new Date(Date.now() + 15 * 60000);
+    }
+
+    const cleanPhone = sanitizePhone(phone);
+    const reminderId = 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const now = new Date().toISOString();
 
     await dbAsync.run(`
-      INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, targetContactPhone, targetContactName, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, 'none', ?, ?, 'pending', ?)
-    `, [reminderId, req.user.id, `Reminder for ${contactName || 'Contact'}`, message.trim(), new Date(reminderTime).toISOString(), cleanContactPhone, contactName || 'Contact', now]);
+      INSERT INTO reminders (id, userId, title, message, reminderTime, repeat, priority, category, targetContactPhone, targetContactName, status, createdAt)
+      VALUES (?, ?, ?, ?, ?, 'none', 'high', 'contact', ?, ?, 'pending', ?)
+    `, [
+      reminderId,
+      req.user.id,
+      title.trim(),
+      (note || '').trim(),
+      targetDate.toISOString(),
+      cleanPhone,
+      (contactName || '').trim(),
+      now
+    ]);
 
-    res.status(201).json({ success: true, message: `Reminder scheduled for ${contactName || cleanContactPhone}!` });
+    res.status(201).json({
+      success: true,
+      reminderId,
+      scheduledTime: targetDate.toLocaleString(),
+      contactName: contactName || cleanPhone
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Delete Reminder
+// 7. Dismiss / Complete a Reminder
+app.post('/api/reminders/:id/dismiss', authMiddleware, async (req, res) => {
+  try {
+    const reminder = await dbAsync.get('SELECT * FROM reminders WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
+    if (!reminder) return res.status(404).json({ error: 'Reminder not found' });
+
+    const now = new Date();
+    if (reminder.repeat === 'daily') {
+      const nextOccurrence = new Date(reminder.reminderTime);
+      nextOccurrence.setDate(nextOccurrence.getDate() + 1);
+
+      if (reminder.endDate && nextOccurrence > new Date(reminder.endDate)) {
+        await dbAsync.run('UPDATE reminders SET status = "completed", sentCount = sentCount + 1, sentAt = ? WHERE id = ?', [now.toISOString(), reminder.id]);
+      } else {
+        await dbAsync.run('UPDATE reminders SET reminderTime = ?, sentCount = sentCount + 1, sentAt = ? WHERE id = ?', [nextOccurrence.toISOString(), now.toISOString(), reminder.id]);
+      }
+    } else {
+      await dbAsync.run('UPDATE reminders SET status = "completed", sentAt = ? WHERE id = ?', [now.toISOString(), reminder.id]);
+    }
+
+    res.json({ success: true, message: 'Reminder dismissed' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Snooze Reminder (5, 10, or 15 mins)
+app.post('/api/reminders/:id/snooze', authMiddleware, async (req, res) => {
+  try {
+    const snoozeMinutes = parseInt(req.body.minutes, 10) || 5;
+    const newTime = new Date(Date.now() + snoozeMinutes * 60000).toISOString();
+
+    await dbAsync.run(
+      'UPDATE reminders SET reminderTime = ?, status = "pending" WHERE id = ? AND userId = ?',
+      [newTime, req.params.id, req.user.id]
+    );
+
+    res.json({ success: true, message: `Snoozed for ${snoozeMinutes} minutes`, newTime });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 9. Delete Reminder
 app.delete('/api/reminders/:id', authMiddleware, async (req, res) => {
   try {
     const result = await dbAsync.run('DELETE FROM reminders WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
@@ -677,32 +710,10 @@ app.delete('/api/reminders/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// Instant Test Trigger Reminder
-app.post('/api/reminders/:id/trigger', authMiddleware, async (req, res) => {
-  try {
-    const reminder = await dbAsync.get('SELECT * FROM reminders WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
-    if (!reminder) return res.status(404).json({ error: 'Reminder not found' });
-
-    const targetPhone = reminder.targetContactPhone || req.user.phone;
-    const msg = `🔔 *Reminder Me* 🔔\n\n📌 *Task:* ${reminder.title}\n💬 *Details:* ${reminder.message}\n⏰ *Sent At:* ${new Date().toLocaleTimeString()}\n\n_Sent via Reminder Me_`;
-
-    await sendAnyWhatsAppMessage(targetPhone, msg);
-    await sendWebPushToUser(req.user.id, {
-      title: 'Reminder Me',
-      body: reminder.title,
-      icon: '/icons/icon.svg'
-    });
-
-    res.json({ success: true, message: 'Reminder sent to WhatsApp & Phone!' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // -------------------------------------------------------------
-// WEB PUSH SUBSCRIPTION & VAPID KEY
+// WEB PUSH SUBSCRIPTIONS
 // -------------------------------------------------------------
-app.get('/api/push/vapid-key', (req, res) => {
+app.get('/api/push/public-key', (req, res) => {
   res.json({ publicKey: vapidKeys.publicKey });
 });
 
@@ -710,14 +721,20 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
   try {
     const { subscription } = req.body;
     if (!subscription || !subscription.endpoint) {
-      return res.status(400).json({ error: 'Subscription object required' });
+      return res.status(400).json({ error: 'Invalid push subscription' });
     }
 
-    const id = 'sub_' + Buffer.from(subscription.endpoint).toString('base64').substring(0, 32);
+    const subId = 'sub_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     await dbAsync.run(`
       INSERT OR REPLACE INTO push_subscriptions (id, userId, endpoint, keys, createdAt)
       VALUES (?, ?, ?, ?, ?)
-    `, [id, req.user.id, subscription.endpoint, JSON.stringify(subscription.keys || {}), new Date().toISOString()]);
+    `, [
+      subId,
+      req.user.id,
+      subscription.endpoint,
+      JSON.stringify(subscription.keys || {}),
+      new Date().toISOString()
+    ]);
 
     res.json({ success: true });
   } catch (err) {
@@ -726,7 +743,7 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// ADMIN PANEL ROUTES (EXCLUSIVE TO OWNER)
+// OWNER EXCLUSIVE ADMIN PANEL APIS
 // -------------------------------------------------------------
 app.get('/api/admin/stats', authMiddleware, ownerMiddleware, async (req, res) => {
   try {
@@ -747,14 +764,14 @@ app.get('/api/admin/stats', authMiddleware, ownerMiddleware, async (req, res) =>
       }
     });
 
-    // Approximate revenue calculation
+    // Total revenue calculation
     let totalRevenue = 0;
     allUsers.forEach(u => {
       if (u.planStatus === 'monthly') totalRevenue += 20.50;
       if (u.planStatus === 'yearly') totalRevenue += 154.00;
     });
 
-    // Strip sensitive passwords for safe display
+    // Strip sensitive passwords for display
     const sanitizedUsers = allUsers.map(u => ({
       id: u.id,
       fullName: u.fullName,
@@ -771,12 +788,12 @@ app.get('/api/admin/stats', authMiddleware, ownerMiddleware, async (req, res) =>
 
     res.json({
       stats: {
-        totalUsers: totalUsersRow.count,
+        totalUsers: totalUsersRow ? totalUsersRow.count : allUsers.length,
         activeTrials,
         activeAutopay,
         totalRevenue: totalRevenue.toFixed(2),
-        totalCoupons: totalCouponsRow.count,
-        usedCoupons: usedCouponsRow.count
+        totalCoupons: totalCouponsRow ? totalCouponsRow.count : 0,
+        usedCoupons: usedCouponsRow ? usedCouponsRow.count : 0
       },
       users: sanitizedUsers
     });
@@ -788,51 +805,24 @@ app.get('/api/admin/stats', authMiddleware, ownerMiddleware, async (req, res) =>
 // Admin Coupon Generator
 app.post('/api/admin/coupons/generate', authMiddleware, ownerMiddleware, async (req, res) => {
   try {
-    const { planType, count } = req.body;
-    const num = Math.min(parseInt(count, 10) || 1, 20);
-    const createdCodes = [];
+    const { count = 5, planType = '1month' } = req.body;
+    const generated = [];
 
-    for (let i = 0; i < num; i++) {
+    for (let i = 0; i < Math.min(count, 50); i++) {
       const prefix = planType === '1year' ? 'FREE1Y-' : 'FREE1M-';
-      const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const code = prefix + randomSuffix;
+      const code = prefix + Math.random().toString(36).substring(2, 8).toUpperCase();
       await dbAsync.run('INSERT INTO coupons (code, planType, isUsed) VALUES (?, ?, 0)', [code, planType || '1month']);
-      createdCodes.push(code);
+      generated.push(code);
     }
 
-    res.json({ success: true, createdCodes });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Admin WhatsApp Status & QR
-app.get('/api/whatsapp/status', (req, res) => {
-  res.json({
-    isConnected: isWAConnected,
-    qr: currentQR,
-    qrImage: currentQRImage,
-    phone: loggedInUserWA || ''
-  });
-});
-
-app.post('/api/whatsapp/logout', authMiddleware, ownerMiddleware, async (req, res) => {
-  try {
-    if (sock) await sock.logout();
-    isWAConnected = false;
-    currentQR = null;
-    currentQRImage = null;
-    loggedInUserWA = '';
-    try { fs.rmSync(AUTH_DIR, { recursive: true, force: true }); } catch (e) {}
-    setTimeout(startWhatsAppBot, 1000);
-    res.json({ success: true, message: 'Disconnected' });
+    res.json({ success: true, count: generated.length, codes: generated });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // -------------------------------------------------------------
-// BACKGROUND DISPATCHER SCHEDULER
+// BACKGROUND DISPATCHER SCHEDULER (Push Notifications)
 // -------------------------------------------------------------
 setInterval(async () => {
   try {
@@ -846,7 +836,6 @@ setInterval(async () => {
     );
 
     for (const reminder of pendingReminders) {
-      // Check user plan status (expired trials don't trigger unless owner)
       const isOwner = reminder.userEmail.toLowerCase() === OWNER_EMAIL || reminder.isOwner === 1;
       let hasAccess = true;
       if (!isOwner) {
@@ -855,7 +844,6 @@ setInterval(async () => {
       }
 
       if (!hasAccess) {
-        console.log(`[Scheduler] User ${reminder.userEmail} plan expired. Skipping reminder ${reminder.id}`);
         continue;
       }
 
@@ -866,17 +854,15 @@ setInterval(async () => {
       }
 
       try {
-        const targetPhone = reminder.targetContactPhone || reminder.userPhone;
         const dueTime = new Date(reminder.reminderTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-        const repeatHeader = reminder.repeat === 'daily' ? '🔁 *DAILY REMINDER* 🔁\n\n' : '🔔 *REMINDER ME* 🔔\n\n';
-
-        const msg = `${repeatHeader}📌 *Task:* ${reminder.title}\n💬 *Note:* ${reminder.message}\n⏰ *Time:* ${dueTime}\n\n_Sent by Reminder Me App_`;
-
-        await sendAnyWhatsAppMessage(targetPhone, msg);
+        
+        // Dispatch Native Push Notification to User's Phone & Lock Screen
         await sendWebPushToUser(reminder.userId, {
-          title: 'Reminder Me Alert',
-          body: reminder.title,
-          icon: '/icons/icon.svg'
+          title: '🔔 Reminder Me Alert',
+          body: `${reminder.title} (${dueTime})\n${reminder.message || ''}`,
+          icon: '/icons/icon.svg',
+          badge: '/icons/icon.svg',
+          data: { reminderId: reminder.id }
         });
 
         if (reminder.repeat === 'daily') {
@@ -891,7 +877,6 @@ setInterval(async () => {
         } else {
           await dbAsync.run('UPDATE reminders SET status = "sent", sentAt = ? WHERE id = ?', [now.toISOString(), reminder.id]);
         }
-        console.log(`[Scheduler] Reminder ${reminder.id} sent successfully`);
       } catch (sendErr) {
         console.error(`[Scheduler] Failed reminder ${reminder.id}:`, sendErr.message);
         await dbAsync.run('UPDATE reminders SET status = "failed", error = ? WHERE id = ?', [sendErr.message, reminder.id]);
@@ -900,7 +885,7 @@ setInterval(async () => {
   } catch (err) {
     console.error('[Scheduler] Error in check loop:', err);
   }
-}, 10000);
+}, 5000);
 
 // Ping endpoint for keepalive
 app.get('/api/ping', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));

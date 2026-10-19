@@ -1,20 +1,16 @@
 {
-  "name": "whatsapp-reminder-mobile",
-  "version": "1.0.0",
-  "description": "Mobile WhatsApp Reminder App",
+  "name": "reminder-me",
+  "version": "2.0.0",
+  "description": "Reminder Me - Smart In-App & Push Notification Reminders",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^7.0.0-rc14",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.3",
-    "pino": "^10.4.0",
-    "qrcode": "^1.5.4",
-    "qrcode-terminal": "^0.12.0",
     "razorpay": "^2.9.8",
     "web-push": "^3.6.7"
   },
