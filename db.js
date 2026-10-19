@@ -81,6 +81,16 @@ const dbAsync = {
       return memoryDb.users.find(u => (u.email || '').toLowerCase().trim() === email) || null;
     }
 
+    // 2b. SELECT * FROM users WHERE phone = ?
+    if (s.includes('from users where phone =')) {
+      const cleanTarget = (params[0] || '').replace(/[^0-9]/g, '');
+      if (!cleanTarget) return null;
+      return memoryDb.users.find(u => {
+        const uPhone = (u.phone || '').replace(/[^0-9]/g, '');
+        return uPhone && (uPhone === cleanTarget || uPhone.endsWith(cleanTarget) || cleanTarget.endsWith(uPhone));
+      }) || null;
+    }
+
     // 3. SELECT * FROM coupons WHERE code = ?
     if (s.includes('from coupons where code =')) {
       const code = (params[0] || '').toUpperCase().trim();

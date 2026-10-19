@@ -695,6 +695,7 @@ app.post('/api/reminders/contact', authMiddleware, async (req, res) => {
     const reminderId = 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     const now = new Date().toISOString();
 
+    // 1. Save reminder in creator's account
     await dbAsync.run(`
       INSERT INTO reminders (id, userId, title, message, reminderTime, reminderTimestamp, repeat, priority, category, targetContactPhone, targetContactName, status, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, 'none', 'high', 'contact', ?, ?, 'pending', ?)
@@ -710,11 +711,42 @@ app.post('/api/reminders/contact', authMiddleware, async (req, res) => {
       now
     ]);
 
+    // 2. Check if contact is a registered user on Reminder Me app!
+    let targetUser = null;
+    let targetUserNotified = false;
+    if (cleanPhone) {
+      targetUser = await dbAsync.get('SELECT * FROM users WHERE phone = ?', [cleanPhone]);
+      if (targetUser && targetUser.id !== req.user.id) {
+        targetUserNotified = true;
+        const incomingId = 'rem_in_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        await dbAsync.run(`
+          INSERT INTO reminders (id, userId, title, message, reminderTime, reminderTimestamp, repeat, priority, category, targetContactPhone, targetContactName, status, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, 'none', 'high', 'received_contact', ?, ?, 'pending', ?)
+        `, [
+          incomingId,
+          targetUser.id,
+          `${req.user.fullName || 'Someone'} ने रिमाइंडर भेजा: ${title.trim()}`,
+          (note || title).trim(),
+          targetTimeIso,
+          targetTimestamp,
+          req.user.phone || '',
+          req.user.fullName || 'Contact',
+          now
+        ]);
+      }
+    }
+
+    const timeFormatted = targetDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+    const shareMessage = `🔔 Reminder Me: "${title.trim()}" scheduled for ${timeFormatted} by ${req.user.fullName || 'a friend'}.\nOpen Reminder Me: https://whatsapp-reminder-0yad.onrender.com/`;
+
     res.status(201).json({
       success: true,
       reminderId,
-      scheduledTime: targetDate.toLocaleString(),
-      contactName: contactName || cleanPhone
+      scheduledTime: timeFormatted,
+      contactName: contactName || cleanPhone,
+      targetUserNotified,
+      cleanPhone,
+      shareMessage
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -944,6 +976,17 @@ setInterval(async () => {
       try {
         const dueTime = new Date(reminder.reminderTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
         
+        // Pick dynamic aesthetic art
+        const dynamicArtImages = [
+          '/images/art_morning_sun.jpg',
+          '/images/art_mountain_sunrise.jpg',
+          '/images/art_lotus_water.jpg',
+          '/images/art_sakura_blossom.jpg',
+          '/images/art_lavender_sunset.jpg',
+          '/images/art_zen_water_stones.jpg'
+        ];
+        const artImage = dynamicArtImages[Math.floor(Math.random() * dynamicArtImages.length)];
+
         // Dispatch Native Push Notification to User's Phone & Lock Screen
         await sendWebPushToUser(reminder.userId, {
           title: '🔔 Reminder Me: ' + reminder.title,
@@ -952,9 +995,24 @@ setInterval(async () => {
             : `Scheduled reminder is due (${dueTime})`,
           icon: '/icons/icon.svg',
           badge: '/icons/icon.svg',
-          image: '/images/card-art.jpg',
+          image: artImage,
           data: { reminderId: reminder.id }
         });
+
+        // Also push to contact user if registered!
+        if (reminder.targetContactPhone) {
+          const contactUser = await dbAsync.get('SELECT * FROM users WHERE phone = ?', [reminder.targetContactPhone]);
+          if (contactUser && contactUser.id !== reminder.userId) {
+            await sendWebPushToUser(contactUser.id, {
+              title: `🔔 Reminder: ${reminder.title}`,
+              body: `${reminder.message || reminder.title} (${dueTime})`,
+              icon: '/icons/icon.svg',
+              badge: '/icons/icon.svg',
+              image: artImage,
+              data: { reminderId: reminder.id }
+            });
+          }
+        }
 
         if (reminder.repeat === 'daily') {
           const nextOccurrence = new Date(reminder.reminderTime);

@@ -1,5 +1,5 @@
 // Service Worker for Reminder Me App
-const CACHE_NAME = 'reminder-me-v3';
+const CACHE_NAME = 'reminder-me-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -8,7 +8,12 @@ const ASSETS_TO_CACHE = [
   '/manifest.json',
   '/icons/icon.svg',
   '/sounds/sweet-chime.wav',
-  '/images/card-art.jpg'
+  '/images/art_morning_sun.jpg',
+  '/images/art_mountain_sunrise.jpg',
+  '/images/art_lotus_water.jpg',
+  '/images/art_sakura_blossom.jpg',
+  '/images/art_lavender_sunset.jpg',
+  '/images/art_zen_water_stones.jpg'
 ];
 
 self.addEventListener('install', (e) => {
@@ -51,7 +56,7 @@ self.addEventListener('push', (e) => {
     body: data.body || 'Scheduled task is due now.',
     icon: '/icons/icon.svg',
     badge: '/icons/icon.svg',
-    image: data.image || '/images/card-art.jpg',
+    image: data.image || '/images/art_morning_sun.jpg',
     vibrate: [250, 100, 250, 100, 250],
     sound: '/sounds/sweet-chime.wav',
     tag: 'reminder-' + (data.data?.reminderId || Date.now()),

@@ -245,8 +245,29 @@ function openAestheticCardFromBanner() {
 }
 
 // -------------------------------------------------------------
-// 🌸 AESTHETIC ENERGY READING CARD (Image 3)
+// 🌸 AESTHETIC ENERGY READING CARD (Dynamic Aesthetic Art)
 // -------------------------------------------------------------
+const aestheticPhotoGallery = [
+  '/images/art_morning_sun.jpg',
+  '/images/art_mountain_sunrise.jpg',
+  '/images/art_lotus_water.jpg',
+  '/images/art_sakura_blossom.jpg',
+  '/images/art_lavender_sunset.jpg',
+  '/images/art_zen_water_stones.jpg'
+];
+
+function getReminderArtwork(reminder) {
+  if (!reminder) return aestheticPhotoGallery[0];
+  const str = (reminder.id || '') + (reminder.title || '') + (reminder.createdAt || '');
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % aestheticPhotoGallery.length;
+  return aestheticPhotoGallery[index];
+}
+
 function openAestheticModal(reminder) {
   activeViewingReminder = reminder;
   aestheticTitle.textContent = reminder.title || 'Task Reminder';
@@ -261,6 +282,12 @@ function openAestheticModal(reminder) {
   const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
   const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   aestheticTimeTag.textContent = `${dateStr} • ${timeStr}`;
+
+  // Assign fresh, dynamic energetic photo for this specific reminder!
+  const imgEl = document.getElementById('aesthetic-card-img');
+  if (imgEl) {
+    imgEl.src = getReminderArtwork(reminder);
+  }
 
   const doneBtn = document.querySelector('.btn-aesthetic-done');
   if (doneBtn) {
@@ -593,7 +620,22 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
     }
 
     playNotificationChime();
-    showToast(`✓ Reminder set for ${contactName}`);
+
+    if (data.targetUserNotified) {
+      showToast(`✓ Delivered directly to ${contactName}'s app account!`, 4000);
+    } else {
+      showToast(`✓ Reminder scheduled for ${contactName}!`, 3000);
+    }
+
+    // Auto-prompt instant 1-tap SMS / Share if phone provided
+    if (data.shareMessage && phone) {
+      setTimeout(() => {
+        if (confirm(`Send reminder alert to ${contactName} (${phone}) right now via SMS / Messaging?`)) {
+          shareReminderDirectly(phone, data.shareMessage);
+        }
+      }, 500);
+    }
+
     document.getElementById('form-contact').reset();
     loadReminders();
     switchNav('list');
@@ -601,6 +643,20 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
     showToast('Error: ' + err.message);
   }
 });
+
+function shareReminderDirectly(phone, text) {
+  const cleanPhone = (phone || '').replace(/[^0-9+]/g, '');
+  if (navigator.share) {
+    navigator.share({
+      title: 'Reminder Me Alert',
+      text: text
+    }).catch(() => {
+      window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(text)}`;
+    });
+  } else {
+    window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(text)}`;
+  }
+}
 
 // -------------------------------------------------------------
 // REMINDERS LIST & MESSAGE BOX (SAVED VAULT)
@@ -667,6 +723,9 @@ function renderReminders() {
         const isDaily = r.repeat === 'daily';
         const contactBadge = r.targetContactName ? `<span class="pill-tag">For: ${escapeHtml(r.targetContactName)}</span>` : '';
         const dailyBadge = isDaily ? `<span class="pill-tag">Daily (${r.repeatTime})</span>` : '';
+        const shareContactBtn = r.targetContactPhone
+          ? `<button class="mini-btn mini-send" onclick="event.stopPropagation(); shareReminderDirectly('${r.targetContactPhone}', '🔔 Reminder Me: ${escapeHtml(r.title)} scheduled for ${dateFormatted}, ${timeFormatted}. Open: ${window.location.origin}')">Share 📲</button>`
+          : '';
 
         return `
           <div class="reminder-item" onclick="openAestheticModalById('${r.id}')">
@@ -675,7 +734,7 @@ function renderReminders() {
                 <div class="reminder-text">${escapeHtml(r.title)}</div>
                 ${r.message && r.message !== r.title ? `<p style="font-size:13px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
               </div>
-              <div style="display:flex; gap:4px;">
+              <div style="display:flex; gap:4px; flex-wrap:wrap;">
                 ${dailyBadge}
                 ${contactBadge}
               </div>
@@ -684,6 +743,7 @@ function renderReminders() {
             <div class="reminder-meta-row">
               <div class="reminder-time-chip">${dateFormatted}, ${timeFormatted}</div>
               <div class="reminder-actions-btns" onclick="event.stopPropagation()">
+                ${shareContactBtn}
                 <button class="mini-btn mini-send" onclick="testPlayReminder('${r.id}')">View</button>
                 <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')">Delete</button>
               </div>
@@ -693,7 +753,7 @@ function renderReminders() {
       }).join('');
     }
   } else {
-    // 📬 MESSAGE BOX (All Saved Reminders with Sweet Peony Artwork)
+    // 📬 MESSAGE BOX (All Saved Reminders with Brand New Aesthetic Artworks)
     if (activeContainer) activeContainer.classList.add('hidden');
     if (activeEmpty) activeEmpty.classList.add('hidden');
     if (msgboxContainer) msgboxContainer.classList.remove('hidden');
@@ -725,24 +785,29 @@ function renderReminders() {
           ? `<span class="pill-tag" style="background:var(--emerald-light); color:var(--emerald-primary);">${t.deliveredTag}</span>`
           : `<span class="pill-tag" style="background:#F3F4F6; color:var(--text-secondary);">${t.scheduledTag}</span>`;
 
+        const shareContactBtn = r.targetContactPhone
+          ? `<button class="btn-msgbox-read" style="background:#FFFFFF; border:1px solid var(--border-subtle); color:var(--text-primary);" onclick="shareReminderDirectly('${r.targetContactPhone}', '🔔 Reminder Me: ${escapeHtml(r.title)} scheduled for ${dateFormatted}, ${timeFormatted}. Open: ${window.location.origin}')">Share 📲</button>`
+          : '';
+
         return `
           <div class="msg-box-card" onclick="openAestheticModalById('${r.id}')">
             <div class="msg-box-top-row">
               <div class="msg-box-thumb-wrap">
-                <img src="/images/card-art.jpg" alt="Sweet Artwork" class="msg-box-thumb">
+                <img src="${getReminderArtwork(r)}" alt="Aesthetic Art" class="msg-box-thumb">
               </div>
               <div class="msg-box-details">
                 <div class="msg-box-title">${escapeHtml(r.title)}</div>
                 <div class="msg-box-text">${escapeHtml(r.message || r.title)}</div>
                 <div class="msg-box-tags">
                   ${statusPill}
-                  ${r.targetContactName ? `<span class="pill-tag" style="font-size:10px;">${escapeHtml(r.targetContactName)}</span>` : ''}
+                  ${r.targetContactName ? `<span class="pill-tag" style="font-size:10px;">For: ${escapeHtml(r.targetContactName)}</span>` : ''}
                 </div>
               </div>
             </div>
             <div class="msg-box-bottom-bar" onclick="event.stopPropagation()">
               <div class="msg-box-time-chip">${dateFormatted} • ${timeFormatted}</div>
               <div class="msg-box-actions">
+                ${shareContactBtn}
                 <button class="btn-msgbox-read" onclick="openAestheticModalById('${r.id}')">${t.readMsg}</button>
                 <button class="btn-msgbox-del" title="Delete" onclick="deleteReminder('${r.id}')">✕</button>
               </div>
