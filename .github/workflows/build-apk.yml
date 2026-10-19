@@ -44,11 +44,15 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          if ! ./gradlew :app:assembleDebug --stacktrace --no-daemon > ../build.log 2>&1; then
+            echo "::error::Gradle build failed!"
+            cat ../build.log | tail -n 120
+            exit 1
+          fi
           cd ..
           mkdir -p release-output
           find android -name "*.apk" -exec cp -v {} release-output/ReminderMe.apk \;
-          test -f release-output/ReminderMe.apk || { echo "ERROR: APK not found!"; exit 1; }
+          test -f release-output/ReminderMe.apk || { echo "::error::ReminderMe.apk not found!"; find android/app/build; exit 1; }
           ls -la release-output/
 
       - name: Upload APK Artifact
