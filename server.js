@@ -149,20 +149,42 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const cleanEmail = email.toLowerCase().trim();
     const cleanPhone = sanitizePhone(phone);
+    const isOwner = cleanEmail === OWNER_EMAIL;
 
-    const existing = await dbAsync.get('SELECT id FROM users WHERE email = ?', [cleanEmail]);
-    if (existing) {
+    const existing = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+    if (existing && !isOwner) {
       return res.status(400).json({ error: 'Account already exists with this Email' });
+    }
+
+    if (existing && isOwner) {
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+      await dbAsync.run('UPDATE users SET passwordHash = ? WHERE id = ?', [passwordHash, existing.id]);
+      const token = jwt.sign({ userId: existing.id }, JWT_SECRET, { expiresIn: '365d' });
+      return res.status(200).json({
+        success: true,
+        token,
+        user: {
+          id: existing.id,
+          fullName: fullName.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
+          planStatus: 'owner',
+          isOwner: true,
+          lifetimeFree: true,
+          trialDaysRemaining: 9999,
+          trialEndsAt: existing.trialEndsAt
+        }
+      });
     }
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const isOwner = cleanEmail === OWNER_EMAIL;
     const now = new Date();
-    const trialEnds = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000); // 10-day trial
+    const trialEnds = new Date(now.getTime() + (isOwner ? 100 * 365 : 10) * 24 * 60 * 60 * 1000);
 
-    const userId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+    const userId = isOwner ? 'usr_owner_deepak' : ('usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6));
     const planStatus = isOwner ? 'owner' : 'trial';
 
     await dbAsync.run(`
@@ -176,7 +198,7 @@ app.post('/api/auth/signup', async (req, res) => {
       passwordHash,
       planStatus,
       trialEnds.toISOString(),
-      isOwner ? null : null,
+      null,
       isOwner ? 1 : 0,
       now.toISOString(),
       now.toISOString()
@@ -215,20 +237,54 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const user = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+    const isOwner = cleanEmail === OWNER_EMAIL;
+    let user = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
 
-    if (!user) {
-      return res.status(400).json({ error: 'Invalid Email or Password' });
+    if (isOwner) {
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+
+      if (!user) {
+        const ownerId = 'usr_owner_deepak';
+        const now = new Date();
+        const trialEnds = new Date(now.getTime() + 100 * 365 * 24 * 60 * 60 * 1000);
+
+        await dbAsync.run(`
+          INSERT INTO users (id, fullName, email, phone, passwordHash, planStatus, trialEndsAt, subscriptionExpiresAt, isOwner, createdAt, lastLoginAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          ownerId,
+          'Deepak Prajapat',
+          cleanEmail,
+          '919876500000',
+          passwordHash,
+          'owner',
+          trialEnds.toISOString(),
+          null,
+          1,
+          now.toISOString(),
+          now.toISOString()
+        ]);
+        user = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+      } else {
+        // Auto-sync owner password to whichever password Deepak enters
+        await dbAsync.run('UPDATE users SET passwordHash = ? WHERE id = ?', [passwordHash, user.id]);
+        user.passwordHash = passwordHash;
+        user.isOwner = 1;
+        user.planStatus = 'owner';
+      }
+    } else {
+      if (!user) {
+        return res.status(400).json({ error: 'Invalid Email or Password' });
+      }
+
+      const match = await bcrypt.compare(password, user.passwordHash);
+      if (!match) {
+        return res.status(400).json({ error: 'Invalid Email or Password' });
+      }
     }
 
-    const match = await bcrypt.compare(password, user.passwordHash);
-    if (!match) {
-      return res.status(400).json({ error: 'Invalid Email or Password' });
-    }
-
-    const isOwner = cleanEmail === OWNER_EMAIL || user.isOwner === 1;
     await dbAsync.run('UPDATE users SET lastLoginAt = ? WHERE id = ?', [new Date().toISOString(), user.id]);
-
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '365d' });
 
     const now = new Date();

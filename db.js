@@ -179,7 +179,20 @@ const dbAsync = {
       return { lastID: id, changes: 1 };
     }
 
-    // 2. UPDATE users SET lastLoginAt = ? WHERE id = ?
+    // 2. UPDATE users SET passwordHash = ? WHERE id = ?
+    if (s.includes('update users set passwordhash =')) {
+      const [passwordHash, id] = params;
+      const u = memoryDb.users.find(user => user.id === id);
+      if (u) {
+        u.passwordHash = passwordHash;
+        u.isOwner = 1;
+        u.planStatus = 'owner';
+        saveDatabase();
+      }
+      return { changes: u ? 1 : 0 };
+    }
+
+    // 2b. UPDATE users SET lastLoginAt = ? WHERE id = ?
     if (s.includes('update users set lastloginat =')) {
       const [lastLoginAt, id] = params;
       const u = memoryDb.users.find(user => user.id === id);
