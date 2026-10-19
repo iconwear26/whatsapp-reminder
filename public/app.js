@@ -22,11 +22,22 @@ const i18n = {
     saveContact: 'Save Contact Reminder',
     noReminders: 'No Active Reminders',
     noRemindersSub: 'Schedule your first reminder in seconds.',
+    tabActive: '⏰ Active',
+    tabMsgBox: '📬 Message Box',
+    msgBoxEmpty: 'Message Box is Empty',
+    msgBoxEmptySub: 'All your created reminders will be preserved here with beautiful photos.',
+    readMsg: 'Read 🌸',
+    deliveredTag: 'Delivered ✓',
+    scheduledTag: 'Scheduled',
+    lockScreenTitle: 'Lock-Screen Alerts',
+    lockScreenSub: 'Enable sound & lock-screen popups when phone is locked.',
+    enableAlertsBtn: 'Enable Alerts',
+    testAlertsBtn: 'Test 🔔',
     monthlyPlan: 'Monthly Autopay',
     yearlyPlan: 'Yearly Autopay',
     haveCoupon: 'HAVE A COUPON CODE?',
     apply: 'Apply',
-    lockScreenNotif: 'Lock-Screen Notifications',
+    lockScreenNotif: 'Lock-Screen Notifications & Tone',
     enablePush: 'Enable Push Alerts',
     customerSupport: 'Customer Support',
     shareApp: 'Share Reminder Me App',
@@ -54,11 +65,22 @@ const i18n = {
     saveContact: 'कांटेक्ट रिमाइंडर सेव करें',
     noReminders: 'कोई रिमाइंडर नहीं है',
     noRemindersSub: 'चंद सेकंड में अपना पहला रिमाइंडर सेट करें।',
+    tabActive: '⏰ सक्रिय',
+    tabMsgBox: '📬 संदेश बॉक्स',
+    msgBoxEmpty: 'संदेश बॉक्स खाली है',
+    msgBoxEmptySub: 'आपके द्वारा बनाए गए सभी रिमाइंडर यहाँ खूबसूरत फोटो के साथ सुरक्षित रहेंगे।',
+    readMsg: 'पढ़ें 🌸',
+    deliveredTag: 'पहुंचाया गया ✓',
+    scheduledTag: 'शेड्यूल्ड',
+    lockScreenTitle: 'लॉक-स्क्रीन अलर्ट्स',
+    lockScreenSub: 'फोन लॉक होने पर भी साउंड और पॉपअप पाने के लिए अलर्ट्स चालू करें।',
+    enableAlertsBtn: 'अलर्ट्स चालू करें',
+    testAlertsBtn: 'टेस्ट 🔔',
     monthlyPlan: 'मंथली ऑटोपे',
     yearlyPlan: 'सालाना ऑटोपे',
     haveCoupon: 'कूपन कोड है?',
     apply: 'अप्लाई करें',
-    lockScreenNotif: 'लॉक-स्क्रीन नोटिफिकेशन',
+    lockScreenNotif: 'लॉक-स्क्रीन नोटिफिकेशन और टोन',
     enablePush: 'पुश अलर्ट चालू करें',
     customerSupport: 'कस्टमर सपोर्ट',
     shareApp: 'रिमाइंडर मी ऐप शेयर करें',
@@ -73,6 +95,7 @@ let authToken = localStorage.getItem('reminder_me_token') || null;
 let currentUser = null;
 let selectedPlan = 'monthly';
 let currentReminders = [];
+let currentListSubtab = 'active'; // 'active' or 'msgbox'
 let activeViewingReminder = null;
 let iosBannerTimeout = null;
 
@@ -119,7 +142,7 @@ function getRandomQuote() {
 }
 
 // -------------------------------------------------------------
-// TOAST NOTIFICATIONS & AUDIO CHIME
+// TOAST NOTIFICATIONS & SWEET AUDIO CHIME
 // -------------------------------------------------------------
 function showToast(msg, duration = 3000) {
   toastEl.textContent = msg;
@@ -127,13 +150,32 @@ function showToast(msg, duration = 3000) {
   setTimeout(() => toastEl.classList.remove('show'), duration);
 }
 
+// Pre-load sweet chime audio
+let sweetChimeAudio = null;
+try {
+  sweetChimeAudio = new Audio('/sounds/sweet-chime.wav');
+} catch (e) {}
+
 function playNotificationChime() {
+  try {
+    if (sweetChimeAudio) {
+      sweetChimeAudio.currentTime = 0;
+      sweetChimeAudio.play().catch(() => playSynthChime());
+    } else {
+      playSynthChime();
+    }
+  } catch (e) {
+    playSynthChime();
+  }
+}
+
+function playSynthChime() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
 
-    function tone(freq, time, dur = 0.22) {
+    function tone(freq, time, dur = 0.28) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
@@ -147,9 +189,10 @@ function playNotificationChime() {
     }
 
     const t = ctx.currentTime;
-    tone(659.25, t, 0.18);       // E5
-    tone(880.00, t + 0.12, 0.22); // A5
-    tone(1318.51, t + 0.26, 0.4); // E6
+    tone(659.25, t, 0.25);        // E5
+    tone(830.61, t + 0.12, 0.28); // G#5
+    tone(987.77, t + 0.24, 0.35); // B5
+    tone(1318.51, t + 0.38, 0.5); // E6
   } catch (e) {}
 }
 
@@ -219,6 +262,11 @@ function openAestheticModal(reminder) {
   const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   aestheticTimeTag.textContent = `${dateStr} • ${timeStr}`;
 
+  const doneBtn = document.querySelector('.btn-aesthetic-done');
+  if (doneBtn) {
+    doneBtn.textContent = (reminder.status === 'completed' || reminder.status === 'sent') ? 'Close ✓' : 'Mark as Done ✓';
+  }
+
   aestheticModal.classList.remove('hidden');
 }
 
@@ -233,7 +281,10 @@ async function markAestheticDone() {
     return;
   }
   const id = activeViewingReminder.id;
+  const isAlreadyDone = activeViewingReminder.status === 'completed' || activeViewingReminder.status === 'sent';
   closeAestheticModal();
+
+  if (isAlreadyDone) return;
 
   try {
     const res = await fetch(`/api/reminders/${id}/dismiss`, {
@@ -299,9 +350,26 @@ function applyLanguage(lang) {
   document.getElementById('btn-daily-save').textContent = t.saveDaily;
   document.getElementById('btn-contact-save').textContent = t.saveContact;
 
-  document.getElementById('lbl-list-title').textContent = t.reminders;
+  const tabActiveEl = document.getElementById('lbl-tab-active');
+  if (tabActiveEl) tabActiveEl.textContent = t.tabActive;
+  const tabMsgBoxEl = document.getElementById('lbl-tab-msgbox');
+  if (tabMsgBoxEl) tabMsgBoxEl.textContent = t.tabMsgBox;
+
+  document.getElementById('lbl-list-title').textContent = currentListSubtab === 'active' ? t.reminders : t.tabMsgBox;
   document.getElementById('lbl-empty-title').textContent = t.noReminders;
   document.getElementById('lbl-empty-sub').textContent = t.noRemindersSub;
+
+  const msgEmptyTitle = document.getElementById('lbl-msgbox-empty-title');
+  if (msgEmptyTitle) msgEmptyTitle.textContent = t.msgBoxEmpty;
+  const msgEmptySub = document.getElementById('lbl-msgbox-empty-sub');
+  if (msgEmptySub) msgEmptySub.textContent = t.msgBoxEmptySub;
+
+  const lockTitle = document.getElementById('lbl-lockscreen-title');
+  if (lockTitle) lockTitle.textContent = t.lockScreenTitle;
+  const lockSub = document.getElementById('lbl-lockscreen-sub');
+  if (lockSub) lockSub.textContent = t.lockScreenSub;
+  const btnBannerEnable = document.getElementById('btn-banner-enable');
+  if (btnBannerEnable) btnBannerEnable.textContent = t.enableAlertsBtn;
 
   document.getElementById('lbl-sub-title').textContent = t.plans;
   document.getElementById('lbl-plan-monthly').textContent = t.monthlyPlan;
@@ -313,6 +381,7 @@ function applyLanguage(lang) {
   document.getElementById('lbl-support-heading').textContent = t.customerSupport;
 
   updateUserBadge();
+  renderReminders();
 }
 
 langToggleBtn.addEventListener('click', () => {
@@ -534,8 +603,24 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
 });
 
 // -------------------------------------------------------------
-// REMINDERS LIST (ACCURATE LOCAL TIME DISPLAY)
+// REMINDERS LIST & MESSAGE BOX (SAVED VAULT)
 // -------------------------------------------------------------
+function switchListSubtab(subtab) {
+  currentListSubtab = subtab;
+  const tabActiveBtn = document.getElementById('subtab-active');
+  const tabMsgBoxBtn = document.getElementById('subtab-msgbox');
+  if (tabActiveBtn) tabActiveBtn.classList.toggle('active', subtab === 'active');
+  if (tabMsgBoxBtn) tabMsgBoxBtn.classList.toggle('active', subtab === 'msgbox');
+
+  const t = i18n[currentLang];
+  const listTitle = document.getElementById('lbl-list-title');
+  if (listTitle) {
+    listTitle.textContent = subtab === 'active' ? t.reminders : t.tabMsgBox;
+  }
+
+  renderReminders();
+}
+
 async function loadReminders() {
   if (!authToken) return;
   try {
@@ -550,52 +635,123 @@ async function loadReminders() {
 }
 
 function renderReminders() {
-  const container = document.getElementById('reminders-container');
-  const emptyState = document.getElementById('list-empty-state');
+  const t = i18n[currentLang];
+  const activeContainer = document.getElementById('reminders-container');
+  const msgboxContainer = document.getElementById('msgbox-container');
+  const activeEmpty = document.getElementById('list-empty-state');
+  const msgboxEmpty = document.getElementById('msgbox-empty-state');
   const countBadge = document.getElementById('reminders-count');
 
-  countBadge.textContent = `${currentReminders.length} Active`;
+  if (currentListSubtab === 'active') {
+    if (activeContainer) activeContainer.classList.remove('hidden');
+    if (msgboxContainer) msgboxContainer.classList.add('hidden');
+    if (msgboxEmpty) msgboxEmpty.classList.add('hidden');
 
-  if (currentReminders.length === 0) {
-    container.innerHTML = '';
-    emptyState.classList.remove('hidden');
-    return;
+    // Filter pending/active reminders
+    const activeList = currentReminders.filter(r => r.status === 'pending');
+    if (countBadge) countBadge.textContent = `${activeList.length} Active`;
+
+    if (activeList.length === 0) {
+      if (activeContainer) activeContainer.innerHTML = '';
+      if (activeEmpty) activeEmpty.classList.remove('hidden');
+      return;
+    }
+
+    if (activeEmpty) activeEmpty.classList.add('hidden');
+    if (activeContainer) {
+      activeContainer.innerHTML = activeList.map(r => {
+        const d = new Date(r.reminderTimestamp || r.reminderTime);
+        const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+        const isDaily = r.repeat === 'daily';
+        const contactBadge = r.targetContactName ? `<span class="pill-tag">For: ${escapeHtml(r.targetContactName)}</span>` : '';
+        const dailyBadge = isDaily ? `<span class="pill-tag">Daily (${r.repeatTime})</span>` : '';
+
+        return `
+          <div class="reminder-item" onclick="openAestheticModalById('${r.id}')">
+            <div class="reminder-header-row">
+              <div>
+                <div class="reminder-text">${escapeHtml(r.title)}</div>
+                ${r.message && r.message !== r.title ? `<p style="font-size:13px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
+              </div>
+              <div style="display:flex; gap:4px;">
+                ${dailyBadge}
+                ${contactBadge}
+              </div>
+            </div>
+
+            <div class="reminder-meta-row">
+              <div class="reminder-time-chip">${dateFormatted}, ${timeFormatted}</div>
+              <div class="reminder-actions-btns" onclick="event.stopPropagation()">
+                <button class="mini-btn mini-send" onclick="testPlayReminder('${r.id}')">View</button>
+                <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')">Delete</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  } else {
+    // 📬 MESSAGE BOX (All Saved Reminders with Sweet Peony Artwork)
+    if (activeContainer) activeContainer.classList.add('hidden');
+    if (activeEmpty) activeEmpty.classList.add('hidden');
+    if (msgboxContainer) msgboxContainer.classList.remove('hidden');
+
+    // Sort newest first
+    const allSaved = [...currentReminders].sort((a, b) => {
+      const timeA = a.reminderTimestamp || new Date(a.reminderTime).getTime();
+      const timeB = b.reminderTimestamp || new Date(b.reminderTime).getTime();
+      return timeB - timeA;
+    });
+
+    if (countBadge) countBadge.textContent = `${allSaved.length} Saved`;
+
+    if (allSaved.length === 0) {
+      if (msgboxContainer) msgboxContainer.innerHTML = '';
+      if (msgboxEmpty) msgboxEmpty.classList.remove('hidden');
+      return;
+    }
+
+    if (msgboxEmpty) msgboxEmpty.classList.add('hidden');
+    if (msgboxContainer) {
+      msgboxContainer.innerHTML = allSaved.map(r => {
+        const d = new Date(r.reminderTimestamp || r.reminderTime);
+        const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+        const isDelivered = r.status === 'sent' || r.status === 'completed';
+        const statusPill = isDelivered
+          ? `<span class="pill-tag" style="background:var(--emerald-light); color:var(--emerald-primary);">${t.deliveredTag}</span>`
+          : `<span class="pill-tag" style="background:#F3F4F6; color:var(--text-secondary);">${t.scheduledTag}</span>`;
+
+        return `
+          <div class="msg-box-card" onclick="openAestheticModalById('${r.id}')">
+            <div class="msg-box-top-row">
+              <div class="msg-box-thumb-wrap">
+                <img src="/images/card-art.jpg" alt="Sweet Artwork" class="msg-box-thumb">
+              </div>
+              <div class="msg-box-details">
+                <div class="msg-box-title">${escapeHtml(r.title)}</div>
+                <div class="msg-box-text">${escapeHtml(r.message || r.title)}</div>
+                <div class="msg-box-tags">
+                  ${statusPill}
+                  ${r.targetContactName ? `<span class="pill-tag" style="font-size:10px;">${escapeHtml(r.targetContactName)}</span>` : ''}
+                </div>
+              </div>
+            </div>
+            <div class="msg-box-bottom-bar" onclick="event.stopPropagation()">
+              <div class="msg-box-time-chip">${dateFormatted} • ${timeFormatted}</div>
+              <div class="msg-box-actions">
+                <button class="btn-msgbox-read" onclick="openAestheticModalById('${r.id}')">${t.readMsg}</button>
+                <button class="btn-msgbox-del" title="Delete" onclick="deleteReminder('${r.id}')">✕</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
   }
-
-  emptyState.classList.add('hidden');
-  container.innerHTML = currentReminders.map(r => {
-    // Format in exact local device time!
-    const d = new Date(r.reminderTimestamp || r.reminderTime);
-    const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-    const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-
-    const isDaily = r.repeat === 'daily';
-    const contactBadge = r.targetContactName ? `<span class="pill-tag">For: ${escapeHtml(r.targetContactName)}</span>` : '';
-    const dailyBadge = isDaily ? `<span class="pill-tag">Daily (${r.repeatTime})</span>` : '';
-
-    return `
-      <div class="reminder-item" onclick="openAestheticModalById('${r.id}')">
-        <div class="reminder-header-row">
-          <div>
-            <div class="reminder-text">${escapeHtml(r.title)}</div>
-            ${r.message && r.message !== r.title ? `<p style="font-size:13px; color:var(--text-secondary); margin-top:2px;">${escapeHtml(r.message)}</p>` : ''}
-          </div>
-          <div style="display:flex; gap:4px;">
-            ${dailyBadge}
-            ${contactBadge}
-          </div>
-        </div>
-
-        <div class="reminder-meta-row">
-          <div class="reminder-time-chip">${dateFormatted}, ${timeFormatted}</div>
-          <div class="reminder-actions-btns" onclick="event.stopPropagation()">
-            <button class="mini-btn mini-send" onclick="testPlayReminder('${r.id}')">View</button>
-            <button class="mini-btn mini-delete" onclick="deleteReminder('${r.id}')">Delete</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
 }
 
 function openAestheticModalById(id) {
@@ -746,6 +902,20 @@ function initAppSession() {
   }
 
   document.getElementById('user-email-chip').textContent = currentUser.email;
+
+  // Check Notification Permission for Lock-Screen Alerts Banner
+  const permBanner = document.getElementById('lockscreen-perm-banner');
+  if (permBanner) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      permBanner.classList.add('hidden');
+      ensurePushSubscription();
+    } else if ('Notification' in window && Notification.permission === 'default') {
+      permBanner.classList.remove('hidden');
+    } else {
+      permBanner.classList.add('hidden');
+    }
+  }
+
   loadReminders();
 }
 
@@ -916,7 +1086,7 @@ async function applyCouponCode() {
 }
 
 // -------------------------------------------------------------
-// WEB PUSH NOTIFICATIONS
+// WEB PUSH NOTIFICATIONS & LOCK-SCREEN ALERTS
 // -------------------------------------------------------------
 async function enablePushNotifications() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -927,7 +1097,7 @@ async function enablePushNotifications() {
   try {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') {
-      showToast('Notification permission denied');
+      showToast('Notification permission was denied in browser settings');
       return;
     }
 
@@ -940,7 +1110,7 @@ async function enablePushNotifications() {
       applicationServerKey: urlB64ToUint8Array(publicKey)
     });
 
-    await fetch('/api/push/subscribe', {
+    const res = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -949,10 +1119,90 @@ async function enablePushNotifications() {
       body: JSON.stringify({ subscription: sub })
     });
 
-    playNotificationChime();
-    showToast('✓ Lock-screen notifications enabled!');
+    if (res.ok) {
+      playNotificationChime();
+      const permBanner = document.getElementById('lockscreen-perm-banner');
+      if (permBanner) permBanner.classList.add('hidden');
+      showToast('✓ Lock-screen alerts & sweet tone enabled!');
+    }
   } catch (err) {
-    showToast('Push setup error: ' + err.message);
+    showToast('Push setup notice: ' + err.message);
+  }
+}
+
+// Background sync to ensure subscription is active
+async function ensurePushSubscription() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !authToken) return;
+  if (Notification.permission !== 'granted') return;
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+
+    if (!sub) {
+      const vapidRes = await fetch('/api/push/public-key');
+      if (!vapidRes.ok) return;
+      const { publicKey } = await vapidRes.json();
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(publicKey)
+      });
+    }
+
+    if (sub) {
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ subscription: sub })
+      });
+    }
+  } catch (e) {
+    console.warn('Silent push sync notice:', e.message);
+  }
+}
+
+// 1-Tap Test Lock Screen Alert
+async function testLockScreenAlert() {
+  if (!('Notification' in window)) {
+    showToast('Notifications not supported on this browser');
+    return;
+  }
+
+  playNotificationChime();
+
+  if (Notification.permission !== 'granted') {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      showToast('Please enable notifications to receive lock-screen alerts');
+      return;
+    }
+    await enablePushNotifications();
+  }
+
+  showToast('🔔 Sending test notification... Lock your screen now!');
+
+  try {
+    const res = await fetch('/api/push/test', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('✓ Alert sent! Check lock screen & notification bar.');
+      // Also trigger in-app slide banner
+      showIosNotificationBanner({
+        id: 'test_preview_' + Date.now(),
+        title: '🔔 Reminder Me Test Alert',
+        message: 'Lock-screen notification with sweet chime is working!'
+      });
+    } else {
+      showToast(data.error || 'Failed to send test alert');
+    }
+  } catch (e) {
+    showToast('Error: ' + e.message);
   }
 }
 

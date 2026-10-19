@@ -809,6 +809,27 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
   }
 });
 
+// Test Push Notification Endpoint
+app.post('/api/push/test', authMiddleware, async (req, res) => {
+  try {
+    const subs = await dbAsync.all('SELECT * FROM push_subscriptions WHERE userId = ?', [req.user.id]);
+    if (!subs || subs.length === 0) {
+      return res.status(400).json({ error: 'No device subscription found. Please tap "Enable Push Alerts" first!' });
+    }
+    await sendWebPushToUser(req.user.id, {
+      title: '🔔 Reminder Me Test Alert',
+      body: 'Lock-screen notifications and sweet chime sound working perfectly! 🌸',
+      icon: '/icons/icon.svg',
+      badge: '/icons/icon.svg',
+      image: '/images/card-art.jpg',
+      data: { test: true }
+    });
+    res.json({ success: true, message: '✓ Test notification sent! Check your notification tray or lock screen.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // -------------------------------------------------------------
 // OWNER EXCLUSIVE ADMIN PANEL APIS
 // -------------------------------------------------------------
@@ -925,10 +946,13 @@ setInterval(async () => {
         
         // Dispatch Native Push Notification to User's Phone & Lock Screen
         await sendWebPushToUser(reminder.userId, {
-          title: '🔔 Reminder Me Alert',
-          body: `${reminder.title} (${dueTime})\n${reminder.message || ''}`,
+          title: '🔔 Reminder Me: ' + reminder.title,
+          body: reminder.message && reminder.message !== reminder.title 
+            ? `${reminder.message} (${dueTime})` 
+            : `Scheduled reminder is due (${dueTime})`,
           icon: '/icons/icon.svg',
           badge: '/icons/icon.svg',
+          image: '/images/card-art.jpg',
           data: { reminderId: reminder.id }
         });
 

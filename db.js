@@ -134,9 +134,16 @@ const dbAsync = {
     if (s.includes('from reminders where userid =') && s.includes('status = \'pending\'')) {
       const nowMs = Date.now();
       return memoryDb.reminders.filter(r => {
-        if (r.userId !== params[0] || r.status !== 'pending') return false;
-        const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
-        return dueMs <= (nowMs + 5000); // 5s grace
+        if (r.userId !== params[0]) return false;
+        if (r.status === 'pending') {
+          const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
+          return dueMs <= (nowMs + 5000); // 5s grace
+        }
+        if (r.status === 'sent' && r.sentAt) {
+          const sentMs = new Date(r.sentAt).getTime();
+          return (nowMs - sentMs) <= 60000; // Sent within last 60 seconds
+        }
+        return false;
       });
     }
 

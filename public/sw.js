@@ -1,12 +1,14 @@
 // Service Worker for Reminder Me App
-const CACHE_NAME = 'reminder-me-v2';
+const CACHE_NAME = 'reminder-me-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
   '/manifest.json',
-  '/icons/icon.svg'
+  '/icons/icon.svg',
+  '/sounds/sweet-chime.wav',
+  '/images/card-art.jpg'
 ];
 
 self.addEventListener('install', (e) => {
@@ -36,7 +38,7 @@ self.addEventListener('fetch', (e) => {
 
 // Push notification received
 self.addEventListener('push', (e) => {
-  let data = { title: 'Reminder Me', body: 'You have a scheduled reminder!' };
+  let data = { title: '🔔 Reminder Me', body: 'You have a scheduled reminder!' };
   if (e.data) {
     try {
       data = e.data.json();
@@ -46,19 +48,23 @@ self.addEventListener('push', (e) => {
   }
 
   const options = {
-    body: data.body,
+    body: data.body || 'Scheduled task is due now.',
     icon: '/icons/icon.svg',
     badge: '/icons/icon.svg',
-    vibrate: [200, 100, 200, 100, 200, 100, 400],
+    image: data.image || '/images/card-art.jpg',
+    vibrate: [250, 100, 250, 100, 250],
+    sound: '/sounds/sweet-chime.wav',
+    tag: 'reminder-' + (data.data?.reminderId || Date.now()),
+    renotify: true,
     requireInteraction: true,
-    data: { url: '/' },
+    data: { url: '/', reminderId: data.data?.reminderId },
     actions: [
-      { action: 'open', title: 'Open Reminder Me' }
+      { action: 'open', title: 'Open & Read 🌸' }
     ]
   };
 
   e.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title || '🔔 Reminder Me', options)
   );
 });
 
