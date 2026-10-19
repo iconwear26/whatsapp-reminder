@@ -1,5 +1,5 @@
 // Service Worker for Reminder Me App
-const CACHE_NAME = 'reminder-me-v7';
+const CACHE_NAME = 'reminder-me-v8';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -10,7 +10,6 @@ const ASSETS_TO_CACHE = [
   '/icons/icon-512.png',
   '/icons/badge-96.png',
   '/icons/icon.svg',
-  '/sounds/sweet-chime.wav',
   '/images/art_morning_sun.jpg',
   '/images/art_mountain_sunrise.jpg',
   '/images/art_lotus_water.jpg',
@@ -46,7 +45,7 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// Push notification received - Bulletproof Native Notification
+// Push notification received - Bulletproof Native Lock-Screen Notification
 self.addEventListener('push', (e) => {
   let data = { title: '🔔 Reminder Me', body: 'You have a scheduled reminder!' };
   if (e.data) {
@@ -62,16 +61,26 @@ self.addEventListener('push', (e) => {
     body: data.body || 'Scheduled task is due now.',
     icon: '/icons/icon-192.png',
     badge: '/icons/badge-96.png',
-    vibrate: [250, 100, 250, 100, 250],
+    vibrate: [300, 150, 300, 150, 300],
     tag: 'reminder-' + (data.reminderId || Date.now()),
     renotify: true,
     requireInteraction: true,
-    data: { url: '/', reminderId: data.reminderId }
+    data: { url: '/', reminderId: data.reminderId, reminder: data },
+    actions: [
+      { action: 'open', title: 'Open 🌸' },
+      { action: 'done', title: 'Done ✓' }
+    ]
   };
+
+  // Broadcast to any open tabs so in-app modal appears immediately
+  clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    windowClients.forEach((client) => {
+      client.postMessage({ type: 'PUSH_REMINDER_TRIGGER', data });
+    });
+  });
 
   const notificationPromise = self.registration.showNotification(title, options)
     .catch((err) => {
-      // Fallback with minimal options if device refuses extended options
       console.error('[SW] Primary showNotification failed, trying fallback:', err);
       return self.registration.showNotification(title, {
         body: options.body,
@@ -84,10 +93,22 @@ self.addEventListener('push', (e) => {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
+  const remId = e.notification.data ? e.notification.data.reminderId : null;
+
+  if (e.action === 'done' && remId) {
+    e.waitUntil(
+      fetch(`/api/reminders/${remId}/dismiss`, { method: 'POST' }).catch(() => {})
+    );
+    return;
+  }
+
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
         if (client.url.includes('/') && 'focus' in client) {
+          if (remId) {
+            client.postMessage({ type: 'OPEN_REMINDER_MODAL', reminderId: remId });
+          }
           return client.focus();
         }
       }

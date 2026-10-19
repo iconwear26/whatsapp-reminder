@@ -284,6 +284,16 @@ async function markAestheticDone() {
   }
 }
 
+async function snoozeAestheticModal(minutes = 10) {
+  if (!activeViewingReminder) {
+    closeAestheticModal();
+    return;
+  }
+  const id = activeViewingReminder.id;
+  closeAestheticModal();
+  await snoozeReminder(id, minutes);
+}
+
 // In-App Background Poller & Precision Timers for Due Reminders
 const handledReminderIds = new Set();
 const activeTimers = new Map();
@@ -491,7 +501,12 @@ async function quickSave(minutes, preset) {
     const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
     showToast(`✓ Scheduled for ${timeFormatted}`);
     inputEl.value = '';
-    loadReminders();
+    if (data.reminder) {
+      currentReminders = currentReminders.filter(r => r.id !== data.reminder.id);
+      currentReminders.unshift(data.reminder);
+      renderReminders();
+    }
+    await loadReminders();
     switchNav('list');
     if ('Notification' in window && Notification.permission === 'default') {
       setTimeout(() => enablePushNotifications(), 400);
@@ -537,7 +552,12 @@ document.getElementById('form-custom').addEventListener('submit', async (e) => {
     const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
     showToast(`✓ Saved for ${timeFormatted}`);
     document.getElementById('form-custom').reset();
-    loadReminders();
+    if (data.reminder) {
+      currentReminders = currentReminders.filter(r => r.id !== data.reminder.id);
+      currentReminders.unshift(data.reminder);
+      renderReminders();
+    }
+    await loadReminders();
     switchNav('list');
     if ('Notification' in window && Notification.permission === 'default') {
       setTimeout(() => enablePushNotifications(), 400);
@@ -581,7 +601,12 @@ document.getElementById('form-daily').addEventListener('submit', async (e) => {
 
     showToast(`✓ Daily reminder scheduled at ${time}`);
     document.getElementById('form-daily').reset();
-    loadReminders();
+    if (data.reminder) {
+      currentReminders = currentReminders.filter(r => r.id !== data.reminder.id);
+      currentReminders.unshift(data.reminder);
+      renderReminders();
+    }
+    await loadReminders();
     switchNav('list');
     if ('Notification' in window && Notification.permission === 'default') {
       setTimeout(() => enablePushNotifications(), 400);
@@ -625,7 +650,12 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
     }
 
     document.getElementById('form-contact').reset();
-    loadReminders();
+    if (data.reminder) {
+      currentReminders = currentReminders.filter(r => r.id !== data.reminder.id);
+      currentReminders.unshift(data.reminder);
+      renderReminders();
+    }
+    await loadReminders();
     switchNav('list');
     if ('Notification' in window && Notification.permission === 'default') {
       setTimeout(() => enablePushNotifications(), 400);
@@ -994,10 +1024,14 @@ async function checkSession() {
     const res = await fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${authToken}` }
     });
-    if (!res.ok) {
+    if (res.status === 401) {
       localStorage.removeItem('reminder_me_token');
       authToken = null;
       switchNav('auth');
+      return;
+    }
+    if (!res.ok) {
+      console.warn('Temporary session check failure:', res.status);
       return;
     }
     const data = await res.json();
@@ -1481,11 +1515,25 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Register PWA Service Worker immediately
+// Register PWA Service Worker immediately and listen for background push events
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').then((reg) => {
     console.log('SW registered successfully:', reg.scope);
   }).catch(err => console.log('SW registration error:', err));
+
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'PUSH_REMINDER_TRIGGER') {
+      const rem = event.data.data;
+      if (rem) {
+        showIosNotificationBanner(rem);
+        loadReminders();
+      }
+    } else if (event.data && event.data.type === 'OPEN_REMINDER_MODAL') {
+      if (event.data.reminderId) {
+        openAestheticModalById(event.data.reminderId);
+      }
+    }
+  });
 }
 
 // Default DateTime for custom inputs in local time

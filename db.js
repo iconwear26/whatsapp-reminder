@@ -41,6 +41,17 @@ function loadDatabase() {
     parsed.push_subscriptions = parsed.push_subscriptions || [];
     parsed.app_settings = parsed.app_settings || {};
 
+    // Auto-heal any corrupted reminder status records
+    parsed.reminders = (parsed.reminders || []).map(r => {
+      if (r && r.status && typeof r.status === 'string' && r.status.includes('T') && r.status.includes(':')) {
+        r.createdAt = r.createdAt || r.status;
+        r.status = 'pending';
+      }
+      if (!r.status) r.status = 'pending';
+      if (r.clientPopped === undefined) r.clientPopped = 0;
+      return r;
+    });
+
     // Ensure seed coupons exist
     defaultData.coupons.forEach(seed => {
       if (!parsed.coupons.some(c => c.code === seed.code)) {
@@ -129,19 +140,8 @@ const dbAsync = {
       return memoryDb.push_subscriptions.filter(p => String(p.userId) === String(params[0]));
     }
 
-    // 2. SELECT * FROM reminders WHERE userId = ? ORDER BY reminderTime ASC
-    if (s.includes('from reminders where userid =')) {
-      const list = memoryDb.reminders.filter(r => String(r.userId) === String(params[0]));
-      return list.sort((a, b) => new Date(a.reminderTime) - new Date(b.reminderTime));
-    }
-
-    // 3. SELECT * FROM users ORDER BY createdAt DESC
-    if (s.includes('from users order by createdat desc')) {
-      return [...memoryDb.users].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
-
-    // 4. In-App Due Check: SELECT * FROM reminders WHERE userId = ? AND clientPopped != 1 AND status != 'completed' AND reminderTime <= ?
-    if (s.includes('from reminders where userid =') && (s.includes('clientpopped') || s.includes('status = \'pending\''))) {
+    // 2. In-App Due Check: SELECT * FROM reminders WHERE userId = ? AND clientPopped != 1 AND status != 'completed' AND reminderTime <= ?
+    if (s.includes('from reminders where userid =') && (s.includes('clientpopped') || s.includes('status = \'pending\'') || s.includes('status !='))) {
       const nowMs = Date.now();
       return memoryDb.reminders.filter(r => {
         if (String(r.userId) !== String(params[0])) return false;
@@ -151,6 +151,17 @@ const dbAsync = {
         // Due now or in the past (up to 24 hours ago) with 10s grace
         return dueMs <= (nowMs + 10000) && (nowMs - dueMs < 86400000);
       });
+    }
+
+    // 3. SELECT * FROM reminders WHERE userId = ? ORDER BY reminderTime ASC
+    if (s.includes('from reminders where userid =')) {
+      const list = memoryDb.reminders.filter(r => String(r.userId) === String(params[0]));
+      return list.sort((a, b) => new Date(a.reminderTime) - new Date(b.reminderTime));
+    }
+
+    // 4. SELECT * FROM users ORDER BY createdAt DESC
+    if (s.includes('from users order by createdat desc')) {
+      return [...memoryDb.users].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
 
     // 5. Scheduler JOIN query:
@@ -329,12 +340,14 @@ const dbAsync = {
     // 12. INSERT INTO reminders
     if (s.startsWith('insert into reminders')) {
       const colMatch = sql.match(/insert\s+into\s+reminders\s*\(([^)]+)\)/i);
+      const valMatch = sql.match(/values\s*\(([^)]+)\)/i);
       const newReminder = {
         id: null,
         userId: null,
         title: '',
         message: '',
         reminderTime: null,
+        reminderTimestamp: null,
         repeat: 'none',
         repeatTime: null,
         endDate: null,
@@ -350,7 +363,22 @@ const dbAsync = {
         error: null
       };
 
-      if (colMatch) {
+      if (colMatch && valMatch) {
+        const cols = colMatch[1].split(',').map(c => c.trim());
+        const vals = valMatch[1].split(',').map(v => v.trim());
+        let paramIdx = 0;
+        cols.forEach((col, idx) => {
+          const valExpr = vals[idx] || '?';
+          if (valExpr === '?') {
+            if (paramIdx < params.length) {
+              newReminder[col] = params[paramIdx++];
+            }
+          } else {
+            const cleanVal = valExpr.replace(/^['"]|['"]$/g, '');
+            newReminder[col] = cleanVal;
+          }
+        });
+      } else if (colMatch) {
         const cols = colMatch[1].split(',').map(c => c.trim());
         cols.forEach((col, idx) => {
           if (idx < params.length) {
@@ -358,9 +386,17 @@ const dbAsync = {
           }
         });
       }
+
       if (!newReminder.reminderTimestamp && newReminder.reminderTime) {
         newReminder.reminderTimestamp = new Date(newReminder.reminderTime).getTime();
       }
+      if (!newReminder.reminderTime && newReminder.reminderTimestamp) {
+        newReminder.reminderTime = new Date(newReminder.reminderTimestamp).toISOString();
+      }
+      if (!newReminder.status || (typeof newReminder.status === 'string' && newReminder.status.includes('T') && newReminder.status.includes(':'))) {
+        newReminder.status = 'pending';
+      }
+
       memoryDb.reminders.push(newReminder);
       saveDatabase();
       return { lastID: newReminder.id, changes: 1 };
