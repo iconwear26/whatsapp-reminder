@@ -57,7 +57,11 @@ async function sendWebPushToUser(userId, payload) {
           endpoint: sub.endpoint,
           keys: JSON.parse(sub.keys)
         };
-        const result = await webpush.sendNotification(pushConfig, payloadStr);
+        const options = {
+          TTL: 86400,
+          urgency: 'high'
+        };
+        const result = await webpush.sendNotification(pushConfig, payloadStr, options);
         console.log(`[WebPush] Successfully pushed to ${sub.endpoint.substring(0, 45)}... (status: ${result.statusCode})`);
       } catch (err) {
         console.error(`[WebPush] Failed push to ${sub.endpoint.substring(0, 45)}... error: ${err.statusCode || err.message}`);
@@ -332,6 +336,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Check Session / Current User
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  const subs = await dbAsync.all('SELECT * FROM push_subscriptions WHERE userId = ?', [req.user.id]);
   res.json({
     user: {
       id: req.user.id,
@@ -344,7 +349,8 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
       hasActiveAccess: req.hasActiveAccess,
       trialDaysRemaining: req.trialDaysRemaining,
       trialEndsAt: req.user.trialEndsAt,
-      subscriptionExpiresAt: req.user.subscriptionExpiresAt
+      subscriptionExpiresAt: req.user.subscriptionExpiresAt,
+      hasPushSubscription: subs.length > 0
     }
   });
 });

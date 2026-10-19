@@ -126,12 +126,12 @@ const dbAsync = {
 
     // 1. SELECT * FROM push_subscriptions WHERE userId = ?
     if (s.includes('from push_subscriptions where userid =')) {
-      return memoryDb.push_subscriptions.filter(p => p.userId === params[0]);
+      return memoryDb.push_subscriptions.filter(p => String(p.userId) === String(params[0]));
     }
 
     // 2. SELECT * FROM reminders WHERE userId = ? ORDER BY reminderTime ASC
     if (s.includes('from reminders where userid =')) {
-      const list = memoryDb.reminders.filter(r => r.userId === params[0]);
+      const list = memoryDb.reminders.filter(r => String(r.userId) === String(params[0]));
       return list.sort((a, b) => new Date(a.reminderTime) - new Date(b.reminderTime));
     }
 
@@ -144,14 +144,10 @@ const dbAsync = {
     if (s.includes('from reminders where userid =') && s.includes('status = \'pending\'')) {
       const nowMs = Date.now();
       return memoryDb.reminders.filter(r => {
-        if (r.userId !== params[0]) return false;
+        if (String(r.userId) !== String(params[0])) return false;
         if (r.status === 'pending') {
           const dueMs = r.reminderTimestamp || new Date(r.reminderTime).getTime();
           return dueMs <= (nowMs + 5000); // 5s grace
-        }
-        if (r.status === 'sent' && r.sentAt) {
-          const sentMs = new Date(r.sentAt).getTime();
-          return (nowMs - sentMs) <= 60000; // Sent within last 60 seconds
         }
         return false;
       });

@@ -199,7 +199,6 @@ function playSynthChime() {
 // -------------------------------------------------------------
 function showIosNotificationBanner(reminder) {
   activeViewingReminder = reminder;
-  playNotificationChime();
 
   iosBannerTitle.textContent = reminder.title || 'Reminder Alert';
   iosBannerMessage.textContent = reminder.message || reminder.title || 'Scheduled task is due';
@@ -938,6 +937,9 @@ async function checkSession() {
     const data = await res.json();
     currentUser = data.user;
     initAppSession();
+    if (!currentUser.hasPushSubscription && 'Notification' in window && Notification.permission === 'granted') {
+      ensurePushSubscription();
+    }
   } catch (err) {
     console.error('Session check error:', err);
   }
@@ -1101,7 +1103,6 @@ async function startRazorpayAutopay() {
         });
         const verifyData = await verifyRes.json();
         if (verifyRes.ok) {
-          playNotificationChime();
           showToast(verifyData.message);
           checkSession();
         }
@@ -1153,7 +1154,6 @@ async function applyCouponCode() {
     });
     const data = await res.json();
     if (res.ok) {
-      playNotificationChime();
       showToast(data.message);
       document.getElementById('coupon-input').value = '';
       checkSession();
@@ -1183,14 +1183,20 @@ async function enablePushNotifications() {
     const reg = await navigator.serviceWorker.ready;
     const vapidRes = await fetch('/api/push/public-key');
     const { publicKey } = await vapidRes.json();
+    const appServerKey = urlB64ToUint8Array(publicKey);
 
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(publicKey)
-      });
-    }
+    // Unsubscribe any stale subscription to guarantee fresh key alignment
+    try {
+      const oldSub = await reg.pushManager.getSubscription();
+      if (oldSub) await oldSub.unsubscribe();
+    } catch (unsubErr) {}
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: appServerKey
+    });
+
+    const subJson = sub.toJSON ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
 
     const res = await fetch('/api/push/subscribe', {
       method: 'POST',
@@ -1198,11 +1204,11 @@ async function enablePushNotifications() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
-      body: JSON.stringify({ subscription: sub })
+      body: JSON.stringify({ subscription: subJson })
     });
 
     if (res.ok) {
-      showToast('✓ Reminders connected!');
+      showToast('✓ Reminders connected to your phone!');
       initAppSession();
     }
   } catch (err) {
@@ -1219,26 +1225,28 @@ async function ensurePushSubscription() {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
 
+    const vapidRes = await fetch('/api/push/public-key');
+    if (!vapidRes.ok) return;
+    const { publicKey } = await vapidRes.json();
+    const appServerKey = urlB64ToUint8Array(publicKey);
+
     if (!sub) {
-      const vapidRes = await fetch('/api/push/public-key');
-      if (!vapidRes.ok) return;
-      const { publicKey } = await vapidRes.json();
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(publicKey)
+        applicationServerKey: appServerKey
       });
     }
 
-    if (sub) {
-      await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`
-        },
-        body: JSON.stringify({ subscription: sub })
-      });
-    }
+    const subJson = sub.toJSON ? sub.toJSON() : JSON.parse(JSON.stringify(sub));
+
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ subscription: subJson })
+    });
   } catch (e) {
     console.warn('Silent push sync notice:', e.message);
   }
@@ -1251,17 +1259,8 @@ async function testLockScreenAlert() {
     return;
   }
 
-  if (Notification.permission !== 'granted') {
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') {
-      showToast('Please allow notifications in browser settings');
-      return;
-    }
-    await enablePushNotifications();
-  } else {
-    await ensurePushSubscription();
-  }
-
+  showToast('Connecting notification...');
+  await enablePushNotifications();
   showToast('🔔 Sending alert... Lock your phone screen now!');
 
   try {

@@ -1,5 +1,5 @@
 // Service Worker for Reminder Me App
-const CACHE_NAME = 'reminder-me-v6';
+const CACHE_NAME = 'reminder-me-v7';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -20,21 +20,23 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
-  );
   self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE).catch(err => console.log('Cache addAll notice:', err)))
+  );
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys.map((key) => {
-        if (key !== CACHE_NAME) return caches.delete(key);
-      })
-    ))
+    Promise.all([
+      caches.keys().then((keys) => Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
+      )),
+      self.clients.claim()
+    ])
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (e) => {
@@ -44,7 +46,7 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-// Push notification received - ONLY TEXT & ICON ON LOCK SCREEN (NO LARGE IMAGE)
+// Push notification received - Bulletproof Native Notification
 self.addEventListener('push', (e) => {
   let data = { title: '🔔 Reminder Me', body: 'You have a scheduled reminder!' };
   if (e.data) {
@@ -55,21 +57,29 @@ self.addEventListener('push', (e) => {
     }
   }
 
+  const title = data.title || '🔔 Reminder Me';
   const options = {
     body: data.body || 'Scheduled task is due now.',
     icon: '/icons/icon-192.png',
     badge: '/icons/badge-96.png',
     vibrate: [250, 100, 250, 100, 250],
-    sound: '/sounds/sweet-chime.wav',
-    tag: 'reminder-' + (data.data?.reminderId || Date.now()),
+    tag: 'reminder-' + (data.reminderId || Date.now()),
     renotify: true,
     requireInteraction: true,
-    data: { url: '/', reminderId: data.data?.reminderId }
+    data: { url: '/', reminderId: data.reminderId }
   };
 
-  e.waitUntil(
-    self.registration.showNotification(data.title || '🔔 Reminder Me', options)
-  );
+  const notificationPromise = self.registration.showNotification(title, options)
+    .catch((err) => {
+      // Fallback with minimal options if device refuses extended options
+      console.error('[SW] Primary showNotification failed, trying fallback:', err);
+      return self.registration.showNotification(title, {
+        body: options.body,
+        icon: '/icons/icon-192.png'
+      });
+    });
+
+  e.waitUntil(notificationPromise);
 });
 
 self.addEventListener('notificationclick', (e) => {
