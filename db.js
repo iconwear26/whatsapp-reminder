@@ -1,121 +1,391 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-const DB_PATH = path.join(DATA_DIR, 'reminder_me.db');
-const db = new sqlite3.Database(DB_PATH);
+const DB_FILE = path.join(DATA_DIR, 'reminder_me.json');
 
-// Initialize Tables
-db.serialize(() => {
-  // Users table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      fullName TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      phone TEXT NOT NULL,
-      passwordHash TEXT NOT NULL,
-      planStatus TEXT DEFAULT 'trial', -- 'trial', 'monthly', 'yearly', 'coupon_lifetime', 'owner'
-      trialEndsAt TEXT NOT NULL,
-      subscriptionExpiresAt TEXT,
-      razorpaySubscriptionId TEXT,
-      isOwner INTEGER DEFAULT 0,
-      createdAt TEXT NOT NULL,
-      lastLoginAt TEXT
-    )
-  `);
-
-  // Reminders table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS reminders (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      title TEXT NOT NULL,
-      message TEXT NOT NULL,
-      reminderTime TEXT NOT NULL,
-      repeat TEXT DEFAULT 'none', -- 'none', 'daily'
-      repeatTime TEXT,
-      endDate TEXT,
-      priority TEXT DEFAULT 'normal',
-      category TEXT DEFAULT 'personal',
-      targetContactPhone TEXT,
-      targetContactName TEXT,
-      status TEXT DEFAULT 'pending', -- 'pending', 'sent', 'completed', 'failed'
-      sentCount INTEGER DEFAULT 0,
-      createdAt TEXT NOT NULL,
-      sentAt TEXT,
-      error TEXT,
-      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
-    )
-  `);
-
-  // Coupons table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS coupons (
-      code TEXT PRIMARY KEY,
-      planType TEXT NOT NULL, -- '1month', '1year', 'lifetime'
-      isUsed INTEGER DEFAULT 0,
-      usedByUserId TEXT,
-      usedAt TEXT
-    )
-  `);
-
-  // Push Subscriptions table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS push_subscriptions (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      endpoint TEXT UNIQUE NOT NULL,
-      keys TEXT NOT NULL,
-      createdAt TEXT NOT NULL
-    )
-  `);
-
-  // Global app settings
-  db.run(`
-    CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    )
-  `);
-
-  // Seed standard single-use coupons & Owner VIP
-  const seedCoupons = [
-    { code: 'OWNER-LIFETIME-VIP', planType: 'lifetime' },
-    { code: 'FREE1M-REMIND01', planType: '1month' },
-    { code: 'FREE1M-REMIND02', planType: '1month' },
-    { code: 'FREE1M-REMIND03', planType: '1month' },
-    { code: 'FREE1M-REMIND04', planType: '1month' },
-    { code: 'FREE1M-REMIND05', planType: '1month' },
-    { code: 'FREE1Y-REMIND01', planType: '1year' },
-    { code: 'FREE1Y-REMIND02', planType: '1year' },
-    { code: 'FREE1Y-REMIND03', planType: '1year' }
-  ];
-
-  const stmt = db.prepare(`INSERT OR IGNORE INTO coupons (code, planType, isUsed) VALUES (?, ?, 0)`);
-  seedCoupons.forEach(c => stmt.run(c.code, c.planType));
-  stmt.finalize();
-});
-
-// Helper DB Promise wrappers
-const dbAsync = {
-  get: (sql, params = []) => new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
-  }),
-  all: (sql, params = []) => new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
-  }),
-  run: (sql, params = []) => new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
-      if (err) return reject(err);
-      resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  })
+// Default initial state
+const defaultData = {
+  users: [],
+  reminders: [],
+  coupons: [
+    { code: 'OWNER-LIFETIME-VIP', planType: 'lifetime', isUsed: 0, usedByUserId: null, usedAt: null },
+    { code: 'FREE1M-REMIND01', planType: '1month', isUsed: 0, usedByUserId: null, usedAt: null },
+    { code: 'FREE1M-REMIND02', planType: '1month', isUsed: 0, usedByUserId: null, usedAt: null },
+    { code: 'FREE1M-REMIND03', planType: '1month', isUsed: 0, usedByUserId: null, usedAt: null },
+    { code: 'FREE1M-REMIND04', planType: '1month', isUsed: 0, usedByUserId: null, usedAt: null },
+    { code: 'FREE1M-REMIND05', planType: '1month', isUsed: 0, usedByUserId: null, usedAt: null },
+    { code: 'FREE1Y-REMIND01', planType: '1year', isUsed: 0, usedByUserId: null, usedAt: null },
+    { code: 'FREE1Y-REMIND02', planType: '1year', isUsed: 0, usedByUserId: null, usedAt: null },
+    { code: 'FREE1Y-REMIND03', planType: '1year', isUsed: 0, usedByUserId: null, usedAt: null }
+  ],
+  push_subscriptions: [],
+  app_settings: {}
 };
 
-module.exports = { db, dbAsync, DB_PATH };
+function loadDatabase() {
+  if (!fs.existsSync(DB_FILE)) {
+    saveDatabase(defaultData);
+    return JSON.parse(JSON.stringify(defaultData));
+  }
+  try {
+    const raw = fs.readFileSync(DB_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    parsed.users = parsed.users || [];
+    parsed.reminders = parsed.reminders || [];
+    parsed.coupons = parsed.coupons || [];
+    parsed.push_subscriptions = parsed.push_subscriptions || [];
+    parsed.app_settings = parsed.app_settings || {};
+
+    // Ensure seed coupons exist
+    defaultData.coupons.forEach(seed => {
+      if (!parsed.coupons.some(c => c.code === seed.code)) {
+        parsed.coupons.push({ ...seed });
+      }
+    });
+
+    return parsed;
+  } catch (err) {
+    console.error('[DB] Error loading DB, using fallback defaults:', err);
+    return JSON.parse(JSON.stringify(defaultData));
+  }
+}
+
+let memoryDb = loadDatabase();
+
+function saveDatabase(dataToSave) {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(dataToSave || memoryDb, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[DB] Save error:', err);
+  }
+}
+
+// Pure JS async query emulator matching SQLite syntax in server.js
+const dbAsync = {
+  get: async (sql, params = []) => {
+    const s = sql.trim().toLowerCase();
+
+    // 1. SELECT * FROM users WHERE id = ?
+    if (s.includes('from users where id =')) {
+      return memoryDb.users.find(u => u.id === params[0]) || null;
+    }
+
+    // 2. SELECT * FROM users WHERE email = ? OR SELECT id FROM users WHERE email = ?
+    if (s.includes('from users where email =')) {
+      const email = (params[0] || '').toLowerCase().trim();
+      return memoryDb.users.find(u => (u.email || '').toLowerCase().trim() === email) || null;
+    }
+
+    // 3. SELECT * FROM coupons WHERE code = ?
+    if (s.includes('from coupons where code =')) {
+      const code = (params[0] || '').toUpperCase().trim();
+      return memoryDb.coupons.find(c => (c.code || '').toUpperCase().trim() === code) || null;
+    }
+
+    // 4. SELECT * FROM reminders WHERE id = ? AND userId = ?
+    if (s.includes('from reminders where id = ? and userid = ?')) {
+      return memoryDb.reminders.find(r => r.id === params[0] && r.userId === params[1]) || null;
+    }
+
+    // 5. SELECT COUNT(*) as count FROM users
+    if (s.includes('count(*)') && s.includes('from users')) {
+      return { count: memoryDb.users.length };
+    }
+
+    // 6. SELECT COUNT(*) as count FROM coupons WHERE isUsed = 1
+    if (s.includes('count(*)') && s.includes('from coupons where isused = 1')) {
+      return { count: memoryDb.coupons.filter(c => c.isUsed === 1).length };
+    }
+
+    // 7. SELECT COUNT(*) as count FROM coupons
+    if (s.includes('count(*)') && s.includes('from coupons')) {
+      return { count: memoryDb.coupons.length };
+    }
+
+    console.warn('[DB] Unhandled dbAsync.get:', sql, params);
+    return null;
+  },
+
+  all: async (sql, params = []) => {
+    const s = sql.trim().toLowerCase();
+
+    // 1. SELECT * FROM push_subscriptions WHERE userId = ?
+    if (s.includes('from push_subscriptions where userid =')) {
+      return memoryDb.push_subscriptions.filter(p => p.userId === params[0]);
+    }
+
+    // 2. SELECT * FROM reminders WHERE userId = ? ORDER BY reminderTime ASC
+    if (s.includes('from reminders where userid =')) {
+      const list = memoryDb.reminders.filter(r => r.userId === params[0]);
+      return list.sort((a, b) => new Date(a.reminderTime) - new Date(b.reminderTime));
+    }
+
+    // 3. SELECT * FROM users ORDER BY createdAt DESC
+    if (s.includes('from users order by createdat desc')) {
+      return [...memoryDb.users].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    // 4. Scheduler JOIN query:
+    // SELECT r.*, u.phone as userPhone, u.email as userEmail, u.planStatus, u.trialEndsAt, u.subscriptionExpiresAt, u.isOwner
+    // FROM reminders r JOIN users u ON r.userId = u.id WHERE r.status = 'pending' AND r.reminderTime <= ?
+    if (s.includes('from reminders r') && s.includes('join users u')) {
+      const checkTime = params[0];
+      const pending = memoryDb.reminders.filter(r => r.status === 'pending' && r.reminderTime <= checkTime);
+      return pending.map(r => {
+        const u = memoryDb.users.find(user => user.id === r.userId) || {};
+        return {
+          ...r,
+          userPhone: u.phone || '',
+          userEmail: u.email || '',
+          planStatus: u.planStatus || 'trial',
+          trialEndsAt: u.trialEndsAt || '',
+          subscriptionExpiresAt: u.subscriptionExpiresAt || null,
+          isOwner: u.isOwner || 0
+        };
+      });
+    }
+
+    console.warn('[DB] Unhandled dbAsync.all:', sql, params);
+    return [];
+  },
+
+  run: async (sql, params = []) => {
+    const s = sql.trim().toLowerCase();
+
+    // 1. INSERT INTO users (id, fullName, email, phone, passwordHash, planStatus, trialEndsAt, createdAt)
+    if (s.startsWith('insert into users')) {
+      const [id, fullName, email, phone, passwordHash, planStatus, trialEndsAt, createdAt] = params;
+      const newUser = {
+        id,
+        fullName,
+        email: (email || '').toLowerCase().trim(),
+        phone,
+        passwordHash,
+        planStatus: planStatus || 'trial',
+        trialEndsAt,
+        createdAt: createdAt || new Date().toISOString(),
+        subscriptionExpiresAt: null,
+        razorpaySubscriptionId: null,
+        isOwner: 0,
+        lastLoginAt: new Date().toISOString()
+      };
+      memoryDb.users.push(newUser);
+      saveDatabase();
+      return { lastID: id, changes: 1 };
+    }
+
+    // 2. UPDATE users SET lastLoginAt = ? WHERE id = ?
+    if (s.includes('update users set lastloginat =')) {
+      const [lastLoginAt, id] = params;
+      const u = memoryDb.users.find(user => user.id === id);
+      if (u) {
+        u.lastLoginAt = lastLoginAt;
+        saveDatabase();
+      }
+      return { changes: u ? 1 : 0 };
+    }
+
+    // 3. UPDATE users SET planStatus = ?, subscriptionExpiresAt = ?, razorpaySubscriptionId = ? WHERE id = ?
+    if (s.includes('update users set planstatus =') && s.includes('razorpaysubscriptionid =')) {
+      const [planStatus, subscriptionExpiresAt, razorpaySubscriptionId, id] = params;
+      const u = memoryDb.users.find(user => user.id === id);
+      if (u) {
+        u.planStatus = planStatus;
+        u.subscriptionExpiresAt = subscriptionExpiresAt;
+        u.razorpaySubscriptionId = razorpaySubscriptionId;
+        saveDatabase();
+      }
+      return { changes: u ? 1 : 0 };
+    }
+
+    // 4. UPDATE users SET planStatus = ?, subscriptionExpiresAt = ? WHERE id = ?
+    if (s.includes('update users set planstatus =') && !s.includes('razorpaysubscriptionid =')) {
+      const [planStatus, subscriptionExpiresAt, id] = params;
+      const u = memoryDb.users.find(user => user.id === id);
+      if (u) {
+        u.planStatus = planStatus;
+        u.subscriptionExpiresAt = subscriptionExpiresAt;
+        saveDatabase();
+      }
+      return { changes: u ? 1 : 0 };
+    }
+
+    // 5. DELETE FROM users WHERE id = ?
+    if (s.includes('delete from users where id =')) {
+      const before = memoryDb.users.length;
+      memoryDb.users = memoryDb.users.filter(u => u.id !== params[0]);
+      saveDatabase();
+      return { changes: before - memoryDb.users.length };
+    }
+
+    // 6. DELETE FROM reminders WHERE userId = ?
+    if (s.includes('delete from reminders where userid =')) {
+      const before = memoryDb.reminders.length;
+      memoryDb.reminders = memoryDb.reminders.filter(r => r.userId !== params[0]);
+      saveDatabase();
+      return { changes: before - memoryDb.reminders.length };
+    }
+
+    // 7. DELETE FROM push_subscriptions WHERE userId = ?
+    if (s.includes('delete from push_subscriptions where userid =')) {
+      const before = memoryDb.push_subscriptions.length;
+      memoryDb.push_subscriptions = memoryDb.push_subscriptions.filter(p => p.userId !== params[0]);
+      saveDatabase();
+      return { changes: before - memoryDb.push_subscriptions.length };
+    }
+
+    // 8. DELETE FROM push_subscriptions WHERE id = ?
+    if (s.includes('delete from push_subscriptions where id =')) {
+      const before = memoryDb.push_subscriptions.length;
+      memoryDb.push_subscriptions = memoryDb.push_subscriptions.filter(p => p.id !== params[0]);
+      saveDatabase();
+      return { changes: before - memoryDb.push_subscriptions.length };
+    }
+
+    // 9. INSERT OR REPLACE INTO push_subscriptions (id, userId, endpoint, keys, createdAt)
+    if (s.includes('into push_subscriptions')) {
+      const [id, userId, endpoint, keys, createdAt] = params;
+      memoryDb.push_subscriptions = memoryDb.push_subscriptions.filter(p => p.endpoint !== endpoint);
+      memoryDb.push_subscriptions.push({ id, userId, endpoint, keys, createdAt });
+      saveDatabase();
+      return { lastID: id, changes: 1 };
+    }
+
+    // 10. UPDATE coupons SET isUsed = 1, usedByUserId = ?, usedAt = ? WHERE code = ?
+    if (s.includes('update coupons set isused = 1')) {
+      const [usedByUserId, usedAt, code] = params;
+      const c = memoryDb.coupons.find(coupon => (coupon.code || '').toUpperCase() === (code || '').toUpperCase());
+      if (c) {
+        c.isUsed = 1;
+        c.usedByUserId = usedByUserId;
+        c.usedAt = usedAt;
+        saveDatabase();
+      }
+      return { changes: c ? 1 : 0 };
+    }
+
+    // 11. INSERT INTO coupons (code, planType, isUsed) VALUES (?, ?, 0)
+    if (s.startsWith('insert into coupons')) {
+      const [code, planType] = params;
+      const cleanCode = (code || '').toUpperCase().trim();
+      if (!memoryDb.coupons.some(c => c.code === cleanCode)) {
+        memoryDb.coupons.push({
+          code: cleanCode,
+          planType: planType || '1month',
+          isUsed: 0,
+          usedByUserId: null,
+          usedAt: null
+        });
+        saveDatabase();
+      }
+      return { changes: 1 };
+    }
+
+    // 12. INSERT INTO reminders
+    if (s.startsWith('insert into reminders')) {
+      const [id, userId, title, message, reminderTime, repeat, repeatTime, endDate, priority, category, targetContactPhone, targetContactName, status, sentCount, createdAt] = params;
+      const newReminder = {
+        id,
+        userId,
+        title,
+        message,
+        reminderTime,
+        repeat: repeat || 'none',
+        repeatTime: repeatTime || null,
+        endDate: endDate || null,
+        priority: priority || 'normal',
+        category: category || 'personal',
+        targetContactPhone: targetContactPhone || null,
+        targetContactName: targetContactName || null,
+        status: status || 'pending',
+        sentCount: sentCount || 0,
+        createdAt: createdAt || new Date().toISOString(),
+        sentAt: null,
+        error: null
+      };
+      memoryDb.reminders.push(newReminder);
+      saveDatabase();
+      return { lastID: id, changes: 1 };
+    }
+
+    // 13. DELETE FROM reminders WHERE id = ? AND userId = ?
+    if (s.includes('delete from reminders where id = ? and userid = ?')) {
+      const [id, userId] = params;
+      const before = memoryDb.reminders.length;
+      memoryDb.reminders = memoryDb.reminders.filter(r => !(r.id === id && r.userId === userId));
+      saveDatabase();
+      return { changes: before - memoryDb.reminders.length };
+    }
+
+    // 14. UPDATE reminders SET status = "completed" WHERE id = ?
+    if (s.includes('update reminders set status = "completed" where id =')) {
+      const [id] = params;
+      const r = memoryDb.reminders.find(rem => rem.id === id);
+      if (r) {
+        r.status = 'completed';
+        saveDatabase();
+      }
+      return { changes: r ? 1 : 0 };
+    }
+
+    // 15. UPDATE reminders SET status = "completed", sentCount = sentCount + 1, sentAt = ? WHERE id = ?
+    if (s.includes('update reminders set status = "completed", sentcount = sentcount + 1')) {
+      const [sentAt, id] = params;
+      const r = memoryDb.reminders.find(rem => rem.id === id);
+      if (r) {
+        r.status = 'completed';
+        r.sentCount = (r.sentCount || 0) + 1;
+        r.sentAt = sentAt;
+        saveDatabase();
+      }
+      return { changes: r ? 1 : 0 };
+    }
+
+    // 16. UPDATE reminders SET reminderTime = ?, sentCount = sentCount + 1, sentAt = ? WHERE id = ?
+    if (s.includes('update reminders set remindertime = ?')) {
+      const [reminderTime, sentAt, id] = params;
+      const r = memoryDb.reminders.find(rem => rem.id === id);
+      if (r) {
+        r.reminderTime = reminderTime;
+        r.sentCount = (r.sentCount || 0) + 1;
+        r.sentAt = sentAt;
+        saveDatabase();
+      }
+      return { changes: r ? 1 : 0 };
+    }
+
+    // 17. UPDATE reminders SET status = "sent", sentAt = ? WHERE id = ?
+    if (s.includes('update reminders set status = "sent"')) {
+      const [sentAt, id] = params;
+      const r = memoryDb.reminders.find(rem => rem.id === id);
+      if (r) {
+        r.status = 'sent';
+        r.sentAt = sentAt;
+        saveDatabase();
+      }
+      return { changes: r ? 1 : 0 };
+    }
+
+    // 18. UPDATE reminders SET status = "failed", error = ? WHERE id = ?
+    if (s.includes('update reminders set status = "failed"')) {
+      const [error, id] = params;
+      const r = memoryDb.reminders.find(rem => rem.id === id);
+      if (r) {
+        r.status = 'failed';
+        r.error = error;
+        saveDatabase();
+      }
+      return { changes: r ? 1 : 0 };
+    }
+
+    console.warn('[DB] Unhandled dbAsync.run:', sql, params);
+    return { changes: 0 };
+  }
+};
+
+module.exports = { db: {}, dbAsync, DB_PATH: DB_FILE };

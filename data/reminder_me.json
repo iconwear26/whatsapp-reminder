@@ -1,0 +1,71 @@
+{
+  "users": [],
+  "reminders": [],
+  "coupons": [
+    {
+      "code": "OWNER-LIFETIME-VIP",
+      "planType": "lifetime",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-REMIND01",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-REMIND02",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-REMIND03",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-REMIND04",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-REMIND05",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-REMIND01",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-REMIND02",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-REMIND03",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    }
+  ],
+  "push_subscriptions": [],
+  "app_settings": {}
+}

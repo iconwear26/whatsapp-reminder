@@ -3,6 +3,7 @@ npm-debug.log
 .DS_Store
 *.zip
 data/*.db
+data/auth_baileys/
 auth_info_baileys/
 .env
 
