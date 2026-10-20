@@ -599,7 +599,7 @@ langToggleBtn.addEventListener('click', () => {
 // NAVIGATION SYSTEM
 // -------------------------------------------------------------
 function switchNav(targetView) {
-  if (currentUser && currentUser.isOwner && targetView === 'subscription') {
+  if (currentUser && checkIsOwnerClient(currentUser) && targetView === 'subscription') {
     targetView = 'admin';
   }
 
@@ -1234,11 +1234,27 @@ async function checkSession() {
   }
 }
 
+function checkIsOwnerClient(user) {
+  if (!user) return false;
+  if (user.isOwner === 1 || user.isOwner === true) return true;
+  if (user.planStatus === 'owner') return true;
+  const email = (user.email || '').toLowerCase().trim();
+  const phone = (user.phone || '').replace(/[^0-9]/g, '');
+  if (email.includes('deepakprajapat')) return true;
+  if (phone.includes('8529062363')) return true;
+  return false;
+}
+
 function initAppSession() {
   if (!currentUser) return;
-  updateUserBadge();
+  const isOwner = checkIsOwnerClient(currentUser);
+  if (isOwner) {
+    currentUser.isOwner = true;
+    currentUser.planStatus = 'owner';
+    currentUser.lifetimeFree = true;
+  }
 
-  const isOwner = currentUser && (currentUser.isOwner || currentUser.planStatus === 'owner' || currentUser.lifetimeFree);
+  updateUserBadge();
 
   if (isOwner) {
     if (navPlansBtn) navPlansBtn.classList.add('hidden');
@@ -1306,8 +1322,9 @@ function initAppSession() {
 function updateUserBadge() {
   if (!currentUser) return;
   const t = i18n[currentLang];
+  const isOwner = checkIsOwnerClient(currentUser);
 
-  if (currentUser.isOwner) {
+  if (isOwner) {
     trialText.textContent = '👑 Owner VIP';
     trialBadge.style.background = 'var(--emerald-light)';
     trialBadge.style.color = 'var(--emerald-primary)';
@@ -1598,7 +1615,7 @@ function urlB64ToUint8Array(base64String) {
 let adminUsersList = [];
 
 async function loadAdminDashboard() {
-  if (!authToken || !currentUser || !currentUser.isOwner) return;
+  if (!authToken || !currentUser || !checkIsOwnerClient(currentUser)) return;
   try {
     const res = await fetch('/api/admin/stats', {
       headers: { Authorization: `Bearer ${authToken}` }

@@ -11,7 +11,23 @@ const { dbAsync } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'reminder_me_super_secret_jwt_key_2026';
-const OWNER_EMAIL = (process.env.OWNER_EMAIL || 'deepakprajapat8529@gmail.com').toLowerCase().trim();
+const OWNER_EMAILS = [
+  'deepakprajapat852@gmail.com',
+  'deepakprajapat8529@gmail.com'
+];
+
+function isOwnerUser(user) {
+  if (!user) return false;
+  const email = (user.email || '').toLowerCase().trim();
+  const phone = (user.phone || '').replace(/[^0-9]/g, '');
+  if (OWNER_EMAILS.includes(email) || email.includes('deepakprajapat')) return true;
+  if (phone.includes('8529062363')) return true;
+  if (user.isOwner === 1 || user.isOwner === true) return true;
+  if (user.planStatus === 'owner') return true;
+  return false;
+}
+
+const OWNER_EMAIL = 'deepakprajapat852@gmail.com';
 
 // Razorpay Config (Keys from env or fallback placeholder)
 const razorpay = new Razorpay({
@@ -124,13 +140,13 @@ async function authMiddleware(req, res, next) {
       }
     }
 
+    const isOwner = isOwnerUser(user);
+    if (isOwner && (user.isOwner !== 1 || user.planStatus !== 'owner')) {
+      user.isOwner = 1;
+      user.planStatus = 'owner';
+      await dbAsync.run("UPDATE users SET isOwner = 1, planStatus = 'owner' WHERE id = ?", [user.id]).catch(() => {});
+    }
     req.user = user;
-    const cleanPhone = sanitizePhone(user.phone || '');
-    const isOwner = (user.email || '').toLowerCase().trim() === OWNER_EMAIL ||
-                    cleanPhone === '918529062363' ||
-                    cleanPhone === '8529062363' ||
-                    user.isOwner === 1 ||
-                    user.planStatus === 'owner';
     req.isOwner = isOwner;
 
     // Check Plan & Access
@@ -140,6 +156,7 @@ async function authMiddleware(req, res, next) {
 
     if (isOwner) {
       hasActiveAccess = true;
+      trialDaysRemaining = 9999;
     } else if (['coupon_lifetime', 'monthly', 'yearly'].includes(user.planStatus)) {
       if (user.planStatus === 'coupon_lifetime') {
         hasActiveAccess = true;
@@ -169,7 +186,7 @@ async function authMiddleware(req, res, next) {
 
 // Owner Middleware
 function ownerMiddleware(req, res, next) {
-  if (!req.isOwner) {
+  if (!req.isOwner && !isOwnerUser(req.user)) {
     return res.status(403).json({ error: 'Forbidden: Owner access only' });
   }
   next();
@@ -193,7 +210,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const cleanEmail = email.toLowerCase().trim();
     const cleanPhone = sanitizePhone(phone);
-    const isOwner = cleanEmail === OWNER_EMAIL;
+    const isOwner = isOwnerUser({ email: cleanEmail, phone: cleanPhone });
 
     const existing = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
     if (existing && !isOwner) {
@@ -281,7 +298,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const isOwner = cleanEmail === OWNER_EMAIL;
+    const isOwner = isOwnerUser({ email: cleanEmail });
     let user = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
 
     if (isOwner) {
