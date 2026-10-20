@@ -328,7 +328,19 @@ const dbAsync = {
       return { changes: u ? 1 : 0 };
     }
 
-    // 4. UPDATE users SET planStatus = ?, subscriptionExpiresAt = ? WHERE id = ?
+    // 4. UPDATE users SET planStatus = ?, trialEndsAt = ? WHERE id = ?
+    if (s.includes('update users set planstatus =') && s.includes('trialendsat =')) {
+      const [trialEndsAt, id] = params;
+      const u = memoryDb.users.find(user => user.id === id);
+      if (u) {
+        u.planStatus = 'trial';
+        u.trialEndsAt = trialEndsAt;
+        saveDatabase();
+      }
+      return { changes: u ? 1 : 0 };
+    }
+
+    // 4b. UPDATE users SET planStatus = ?, subscriptionExpiresAt = ? WHERE id = ?
     if (s.includes('update users set planstatus =') && !s.includes('razorpaysubscriptionid =')) {
       const [planStatus, subscriptionExpiresAt, id] = params;
       const u = memoryDb.users.find(user => user.id === id);

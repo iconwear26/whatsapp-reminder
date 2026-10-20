@@ -455,17 +455,18 @@
               <div style="display:flex; align-items:center; gap:8px;">
                 <span style="font-size:22px;">⚡</span>
                 <div>
-                  <div style="font-weight:700; font-size:14px; color:var(--text-primary);">Instant App Update (Cloud Sync)</div>
-                  <div style="font-size:11px; color:var(--text-secondary);" id="lbl-app-version">Version 3.1 • Live Cloud Connected</div>
+                  <div style="font-weight:700; font-size:14px; color:var(--text-primary);">App Updates & Cloud Sync</div>
+                  <div style="font-size:11px; color:var(--text-secondary);" id="lbl-app-version">Version 3.1.0 • Up to Date 🌸</div>
                 </div>
               </div>
-              <span class="pill-tag" style="background:#10B981; color:#fff; font-size:10px;">Instant</span>
+              <span id="badge-update-status" class="pill-tag" style="background:#10B981; color:#fff; font-size:10px;">Latest</span>
             </div>
             <p style="font-size:11px; color:var(--text-secondary); margin-bottom:12px; line-height:1.4;">
-              Jab bhi naye features ya updates aayein, bina naya APK download kiye direct yahan se sync karein. Login session surakshit rahega.
+              Naye features aur security improvements bina APK re-download kiye yahan se instant sync hote hain. Aapka data aur login session bilkul safe rahega.
             </p>
-            <button type="button" class="btn-pill btn-forest" style="padding:10px 18px; font-size:13px; font-weight:700; width:100%;" onclick="triggerLiveAppUpdate()">
-              🔄 Check & Update App Now
+            <button id="btn-update-action" type="button" class="btn-pill btn-forest" style="padding:10px 18px; font-size:13px; font-weight:700; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="triggerLiveAppUpdate()">
+              <span id="spinner-update" class="hidden">⏳</span>
+              <span id="text-update-btn">🔄 Check for Updates</span>
             </button>
           </div>
 
@@ -551,10 +552,15 @@
             <input type="text" id="admin-user-search" class="input-glass" placeholder="🔍 Search users by name, phone or email..." oninput="filterAdminUsers()">
           </div>
 
-          <!-- Export Data Button -->
-          <button type="button" class="btn-pill btn-forest mb-3" onclick="exportAdminDataCSV()">
-            Export Users & Data to CSV
-          </button>
+          <!-- Export & Clean Actions -->
+          <div style="display:flex; gap:8px; margin-bottom:14px;">
+            <button type="button" class="btn-pill btn-forest" style="flex:1; padding:9px 14px; font-size:12px; font-weight:700;" onclick="exportAdminDataCSV()">
+              📥 Export CSV
+            </button>
+            <button type="button" class="btn-pill btn-secondary" style="width:auto; padding:9px 14px; font-size:12px; font-weight:700; color:#DC2626; border-color:#FCA5A5;" onclick="adminCleanTests()">
+              🧹 Clean Test Data
+            </button>
+          </div>
 
           <!-- Generate Coupons -->
           <div class="mt-3 p-3" style="background:#F9FAFB; border-radius:18px; border:1px solid var(--border-subtle);">
@@ -662,6 +668,42 @@
         <div class="aesthetic-card-footer" style="display:flex; gap:10px;">
           <button type="button" class="btn-aesthetic-done" style="flex:1;" onclick="markAestheticDone()">Done ✓</button>
           <button type="button" class="btn-aesthetic-snooze" style="flex:1; background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; border-radius:var(--radius-pill); font-weight:700; font-size:14px; padding:12px 16px; cursor:pointer;" onclick="snoozeAestheticModal(10)">Snooze 10m ⏰</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 👤 Owner User Data Inspector & Management Modal -->
+    <div id="admin-user-modal" class="modal-backdrop hidden" onclick="closeAdminUserModal(event)">
+      <div class="aesthetic-card-box" style="max-width:440px; padding:18px;" onclick="event.stopPropagation()">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div>
+            <h3 id="modal-user-name" style="font-size:16px; font-weight:700; color:var(--text-primary); margin:0;">User Profile</h3>
+            <span id="modal-user-plan-badge" class="pill-tag mt-1">Plan</span>
+          </div>
+          <button type="button" class="mini-btn mini-delete" style="font-size:16px;" onclick="closeAdminUserModal()">✕</button>
+        </div>
+
+        <div id="modal-user-meta" style="background:#F9FAFB; border:1px solid var(--border-subtle); border-radius:14px; padding:12px; margin-bottom:14px; font-size:12px; line-height:1.6;">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Quick Admin Action Buttons -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+          <button type="button" class="btn-pill btn-forest" style="padding:9px 12px; font-size:11px; font-weight:700;" onclick="adminActionGrantVip()">
+            👑 Grant VIP Forever
+          </button>
+          <button type="button" class="btn-pill btn-secondary" style="padding:9px 12px; font-size:11px; font-weight:700;" onclick="adminActionExtendTrial()">
+            ⏳ +30 Days Trial
+          </button>
+        </div>
+
+        <button type="button" class="btn-pill btn-danger-outline" style="padding:9px 12px; font-size:11px; font-weight:700; width:100%; margin-bottom:14px;" onclick="adminActionDeleteUser()">
+          🗑️ Delete User & Data
+        </button>
+
+        <h4 id="modal-user-rems-title" style="font-size:12px; font-weight:700; margin-bottom:8px; color:var(--text-primary);">Saved Reminders:</h4>
+        <div id="modal-user-reminders" style="max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+          <!-- Dynamically populated -->
         </div>
       </div>
     </div>

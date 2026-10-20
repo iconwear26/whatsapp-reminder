@@ -243,6 +243,23 @@ const passwordResetLimiter = rateLimit({
   message: { error: 'Password reset request limit reached. Please wait 1 hour.' }
 });
 
+const couponLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many coupon attempts. Please try again in 15 minutes.' }
+});
+
+// Protect against directory traversal, dotfiles (.env, .git)
+app.use((req, res, next) => {
+  const p = (req.path || '').toLowerCase();
+  if (p.includes('.env') || p.includes('.git') || p.includes('/..') || p.startsWith('/.') || p.includes('reminder_me.json')) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  next();
+});
+
 app.use('/api/', apiLimiter);
 app.use(express.json({ limit: '64kb' }));
 app.use(express.urlencoded({ extended: false, limit: '64kb' }));
@@ -415,6 +432,11 @@ app.post('/api/auth/signup', signupLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Account already exists with this Email' });
     }
 
+    const existingPhone = await dbAsync.get('SELECT * FROM users WHERE phone = ?', [cleanPhone]);
+    if (existingPhone && !isOwner) {
+      return res.status(400).json({ error: 'Account already exists with this Phone Number' });
+    }
+
     if (existing && isOwner) {
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(password, salt);
@@ -499,10 +521,11 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     let user = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
 
     if (isOwner) {
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(password, salt);
-
       if (!user) {
+        // Initial auto-provisioning of owner on first login
+        const salt = await bcrypt.genSalt(10);
+        const ownerPassword = process.env.OWNER_INITIAL_PASSWORD || password;
+        const passwordHash = await bcrypt.hash(ownerPassword, salt);
         const ownerId = 'usr_owner_deepak';
         const now = new Date();
         const trialEnds = new Date(now.getTime() + 100 * 365 * 24 * 60 * 60 * 1000);
@@ -525,11 +548,19 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         ]);
         user = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
       } else {
-        // Auto-sync owner password to whichever password Deepak enters
-        await dbAsync.run('UPDATE users SET passwordHash = ? WHERE id = ?', [passwordHash, user.id]);
-        user.passwordHash = passwordHash;
-        user.isOwner = 1;
-        user.planStatus = 'owner';
+        // Strict bcrypt password verification for owner (blocks arbitrary password takeover)
+        const match = await bcrypt.compare(password, user.passwordHash);
+        if (!match) {
+          const envInitialPass = process.env.OWNER_INITIAL_PASSWORD;
+          if (envInitialPass && password === envInitialPass) {
+            const salt = await bcrypt.genSalt(10);
+            const newHash = await bcrypt.hash(password, salt);
+            await dbAsync.run('UPDATE users SET passwordHash = ? WHERE id = ?', [newHash, user.id]);
+            user.passwordHash = newHash;
+          } else {
+            return res.status(400).json({ error: 'Invalid Email or Password' });
+          }
+        }
       }
     } else {
       if (!user) {
@@ -727,7 +758,7 @@ app.delete('/api/auth/delete-account', authMiddleware, async (req, res) => {
 // -------------------------------------------------------------
 
 // Single-use Coupon Apply
-app.post('/api/subscription/apply-coupon', authMiddleware, async (req, res) => {
+app.post('/api/subscription/apply-coupon', authMiddleware, couponLimiter, async (req, res) => {
   try {
     const { code } = req.body;
     if (!code || !code.trim()) {
@@ -995,6 +1026,17 @@ app.post('/api/reminders', authMiddleware, async (req, res) => {
     const title = (req.body.title || req.body.message || req.body.text || '').trim();
     if (!title) {
       return res.status(400).json({ error: 'Reminder title / message is required' });
+    }
+    if (title.length > 300) {
+      return res.status(400).json({ error: 'Reminder title is too long (maximum 300 characters).' });
+    }
+    if (req.body.note && req.body.note.length > 2000) {
+      return res.status(400).json({ error: 'Reminder note is too long (maximum 2000 characters).' });
+    }
+
+    const userReminders = await dbAsync.all('SELECT * FROM reminders WHERE userId = ?', [req.user.id]);
+    if (userReminders.length >= 300 && !req.isOwner) {
+      return res.status(400).json({ error: 'Reminder limit reached (maximum 300 active reminders). Please complete or delete old reminders.' });
     }
 
     const {
@@ -1642,6 +1684,70 @@ app.post('/api/admin/coupons/generate', authMiddleware, ownerMiddleware, async (
     res.json({ success: true, count: generated.length, codes: generated });
   } catch (err) {
     return sendInternalError(res, err, 'Error generating coupons');
+  }
+});
+
+// Admin User Action: Grant VIP Lifetime Plan
+app.post('/api/admin/users/:id/grant-vip', authMiddleware, ownerMiddleware, async (req, res) => {
+  try {
+    const targetUser = await dbAsync.get('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+    const expiresAt = new Date(Date.now() + 100 * 365 * 86400000).toISOString();
+    await dbAsync.run("UPDATE users SET planStatus = 'coupon_lifetime', subscriptionExpiresAt = ? WHERE id = ?", [expiresAt, targetUser.id]);
+    res.json({ success: true, message: `VIP Lifetime access granted to ${targetUser.fullName || targetUser.email}` });
+  } catch (err) {
+    return sendInternalError(res, err, 'Error granting VIP plan');
+  }
+});
+
+// Admin User Action: Extend Trial (+30 Days)
+app.post('/api/admin/users/:id/extend-trial', authMiddleware, ownerMiddleware, async (req, res) => {
+  try {
+    const targetUser = await dbAsync.get('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+    const currentEnd = new Date(targetUser.trialEndsAt && new Date(targetUser.trialEndsAt) > new Date() ? targetUser.trialEndsAt : Date.now());
+    const newTrialEnd = new Date(currentEnd.getTime() + 30 * 86400000).toISOString();
+    await dbAsync.run("UPDATE users SET planStatus = 'trial', trialEndsAt = ? WHERE id = ?", [newTrialEnd, targetUser.id]);
+    res.json({ success: true, message: `Trial extended by 30 days for ${targetUser.fullName || targetUser.email}` });
+  } catch (err) {
+    return sendInternalError(res, err, 'Error extending trial');
+  }
+});
+
+// Admin User Action: Permanently Delete User & Clean Records
+app.delete('/api/admin/users/:id', authMiddleware, ownerMiddleware, async (req, res) => {
+  try {
+    if (req.params.id === req.user.id || req.params.id === 'usr_owner_deepak') {
+      return res.status(400).json({ error: 'Cannot delete the owner account.' });
+    }
+    await dbAsync.run('DELETE FROM reminders WHERE userId = ?', [req.params.id]);
+    await dbAsync.run('DELETE FROM push_subscriptions WHERE userId = ?', [req.params.id]);
+    await dbAsync.run('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'User record and associated reminders permanently deleted.' });
+  } catch (err) {
+    return sendInternalError(res, err, 'Error deleting user');
+  }
+});
+
+// Admin User Action: Purge Test / Simulated Data
+app.post('/api/admin/clean-tests', authMiddleware, ownerMiddleware, async (req, res) => {
+  try {
+    const allUsers = await dbAsync.all('SELECT * FROM users ORDER BY createdAt DESC');
+    let cleanedCount = 0;
+    for (const u of allUsers) {
+      if (u.id !== req.user.id && u.id !== 'usr_owner_deepak') {
+        const isTest = u.id.startsWith('test') || u.id.includes('_test_') || (u.email && (u.email.includes('test') || u.email.includes('example.com') || u.email.includes('fake')));
+        if (isTest) {
+          await dbAsync.run('DELETE FROM reminders WHERE userId = ?', [u.id]);
+          await dbAsync.run('DELETE FROM push_subscriptions WHERE userId = ?', [u.id]);
+          await dbAsync.run('DELETE FROM users WHERE id = ?', [u.id]);
+          cleanedCount++;
+        }
+      }
+    }
+    res.json({ success: true, message: `Cleaned ${cleanedCount} test entries.` });
+  } catch (err) {
+    return sendInternalError(res, err, 'Error cleaning test data');
   }
 });
 

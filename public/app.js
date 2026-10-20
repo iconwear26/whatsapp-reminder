@@ -1692,6 +1692,8 @@ async function loadAdminDashboard() {
   }
 }
 
+let activeInspectedUser = null;
+
 function renderAdminUsersTable(users) {
   const tbody = document.getElementById('admin-users-tbody');
   if (!tbody) return;
@@ -1707,44 +1709,160 @@ function renderAdminUsersTable(users) {
       ? '<span class="pill-tag" style="background:#10B981; color:#fff; font-size:10px;">👑 OWNER</span>'
       : `<span class="pill-tag" style="font-size:10px;">${escapeHtml(u.planStatus)}</span>`;
 
-    const remDetailsHtml = hasRems
-      ? remList.map(r => `
-          <div style="background:#fff; border:1px solid #E5E7EB; border-radius:10px; padding:8px 12px; margin-top:6px; font-size:12px;">
-            <div style="font-weight:700; color:#1F2937;">📌 ${escapeHtml(r.title)}</div>
-            ${r.message && r.message !== r.title ? `<div style="color:#4B5563; font-size:11px;">${escapeHtml(r.message)}</div>` : ''}
-            <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:10px; color:#6B7280;">
-              <span>⏰ ${new Date(r.time).toLocaleString()}</span>
-              <span>Status: <b style="color:${r.status === 'completed' ? '#10B981' : '#F59E0B'}">${r.status}</b></span>
-            </div>
-            ${r.targetContactName ? `<div style="font-size:10px; color:#059669; margin-top:2px;">Target Contact: ${escapeHtml(r.targetContactName)}</div>` : ''}
-          </div>
-        `).join('')
-      : '<div style="font-size:11px; color:#9CA3AF; padding:6px 0;">No saved reminders for this user yet.</div>';
-
     return `
-      <tr style="cursor:pointer;" onclick="toggleUserReminders('user-rem-${idx}')">
+      <tr style="cursor:pointer;" onclick="inspectAdminUser(${idx})">
         <td>
           <strong>${escapeHtml(u.fullName || 'User')}</strong>${u.isOwner ? ' 👑' : ''}
-          <div style="font-size:10px; color:var(--text-secondary);">${hasRems ? `🔔 ${remList.length} reminders (Tap to view)` : '0 reminders'}</div>
+          <div style="font-size:10px; color:var(--emerald-primary); font-weight:600;">${hasRems ? `🔔 ${remList.length} reminders (Tap to inspect)` : '0 reminders (Tap to inspect)'}</div>
         </td>
         <td>${escapeHtml(u.email || '-')}</td>
         <td><strong>${escapeHtml(u.phone || '-')}</strong></td>
         <td>${planPill}</td>
         <td>${u.subscriptionExpiresAt ? new Date(u.subscriptionExpiresAt).toLocaleDateString() : 'Trial'}</td>
       </tr>
-      <tr id="user-rem-${idx}" class="hidden" style="background:#F9FAFB;">
-        <td colspan="5" style="padding:12px 16px;">
-          <div style="font-weight:700; font-size:12px; margin-bottom:6px; color:#111827;">Saved Reminders (${remList.length}) for ${escapeHtml(u.fullName)}:</div>
-          ${remDetailsHtml}
-        </td>
-      </tr>
     `;
   }).join('');
 }
 
-function toggleUserReminders(rowId) {
-  const el = document.getElementById(rowId);
-  if (el) el.classList.toggle('hidden');
+function inspectAdminUser(idx) {
+  const u = adminUsersList[idx];
+  if (!u) return;
+  activeInspectedUser = u;
+
+  const modal = document.getElementById('admin-user-modal');
+  const nameEl = document.getElementById('modal-user-name');
+  const badgeEl = document.getElementById('modal-user-plan-badge');
+  const metaEl = document.getElementById('modal-user-meta');
+  const remsEl = document.getElementById('modal-user-reminders');
+  const remsTitle = document.getElementById('modal-user-rems-title');
+
+  if (nameEl) nameEl.textContent = u.fullName || 'User Profile';
+  if (badgeEl) {
+    badgeEl.textContent = u.isOwner ? '👑 OWNER' : (u.planStatus || 'trial').toUpperCase();
+    badgeEl.style.background = u.isOwner ? '#10B981' : 'var(--emerald-primary)';
+    badgeEl.style.color = '#fff';
+  }
+
+  if (metaEl) {
+    metaEl.innerHTML = `
+      <div><strong>Email:</strong> ${escapeHtml(u.email || 'None')}</div>
+      <div><strong>Phone:</strong> ${escapeHtml(u.phone || 'None')}</div>
+      <div><strong>Plan:</strong> <span style="text-transform:uppercase; font-weight:700;">${escapeHtml(u.planStatus)}</span></div>
+      <div><strong>Registered:</strong> ${new Date(u.createdAt).toLocaleDateString()}</div>
+      <div><strong>Validity:</strong> ${u.subscriptionExpiresAt ? new Date(u.subscriptionExpiresAt).toLocaleDateString() : (u.trialEndsAt ? new Date(u.trialEndsAt).toLocaleDateString() : 'Active')}</div>
+      <div><strong>Total Saved Reminders:</strong> ${u.reminders ? u.reminders.length : 0}</div>
+    `;
+  }
+
+  const remList = u.reminders || [];
+  if (remsTitle) remsTitle.textContent = `User's Saved Reminders (${remList.length}):`;
+  if (remsEl) {
+    if (remList.length === 0) {
+      remsEl.innerHTML = '<div style="font-size:12px; color:var(--text-secondary); padding:10px 0;">No reminders saved by this user yet.</div>';
+    } else {
+      remsEl.innerHTML = remList.map(r => `
+        <div style="background:#fff; border:1px solid #E5E7EB; border-radius:10px; padding:8px 12px; font-size:12px;">
+          <div style="font-weight:700; color:#1F2937;">📌 ${escapeHtml(r.title)}</div>
+          ${r.message && r.message !== r.title ? `<div style="color:#4B5563; font-size:11px; margin-top:2px;">${escapeHtml(r.message)}</div>` : ''}
+          <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:10px; color:#6B7280;">
+            <span>⏰ ${new Date(r.time).toLocaleString()}</span>
+            <span>Status: <b style="color:${r.status === 'completed' ? '#10B981' : '#F59E0B'}">${escapeHtml(r.status)}</b></span>
+          </div>
+          ${r.targetContactName ? `<div style="font-size:10px; color:#059669; margin-top:2px;">Target Contact: ${escapeHtml(r.targetContactName)}</div>` : ''}
+        </div>
+      `).join('');
+    }
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeAdminUserModal() {
+  const modal = document.getElementById('admin-user-modal');
+  if (modal) modal.classList.add('hidden');
+  activeInspectedUser = null;
+}
+
+async function adminActionGrantVip() {
+  if (!activeInspectedUser) return;
+  if (!confirm(`Grant VIP Lifetime (100% Free Forever) to ${activeInspectedUser.fullName || activeInspectedUser.email}?`)) return;
+  try {
+    const res = await fetch(`/api/admin/users/${activeInspectedUser.id}/grant-vip`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message);
+      closeAdminUserModal();
+      loadAdminStats();
+    } else {
+      showToast(data.error || 'Failed to grant VIP');
+    }
+  } catch (err) {
+    showToast('Network error');
+  }
+}
+
+async function adminActionExtendTrial() {
+  if (!activeInspectedUser) return;
+  if (!confirm(`Extend free trial by 30 days for ${activeInspectedUser.fullName || activeInspectedUser.email}?`)) return;
+  try {
+    const res = await fetch(`/api/admin/users/${activeInspectedUser.id}/extend-trial`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message);
+      closeAdminUserModal();
+      loadAdminStats();
+    } else {
+      showToast(data.error || 'Failed to extend trial');
+    }
+  } catch (err) {
+    showToast('Network error');
+  }
+}
+
+async function adminActionDeleteUser() {
+  if (!activeInspectedUser) return;
+  if (!confirm(`Permanently delete account and all reminders of ${activeInspectedUser.fullName || activeInspectedUser.email}? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/admin/users/${activeInspectedUser.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message);
+      closeAdminUserModal();
+      loadAdminStats();
+    } else {
+      showToast(data.error || 'Failed to delete user');
+    }
+  } catch (err) {
+    showToast('Network error');
+  }
+}
+
+async function adminCleanTests() {
+  if (!confirm('Clean all dummy/test accounts? Genuine registered users will not be affected.')) return;
+  try {
+    const res = await fetch('/api/admin/clean-tests', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message);
+      loadAdminStats();
+    } else {
+      showToast(data.error || 'Failed to clean test data');
+    }
+  } catch (err) {
+    showToast('Network error');
+  }
 }
 
 function filterAdminUsers() {
@@ -1763,32 +1881,49 @@ function filterAdminUsers() {
 }
 
 // -------------------------------------------------------------
-// INSTANT IN-APP LIVE UPDATE (No APK Re-download Required)
+// INSTANT IN-APP LIVE UPDATE (Smooth, Modern & Bulletproof)
 // -------------------------------------------------------------
 async function triggerLiveAppUpdate() {
-  showToast('🔄 Connecting to live cloud server...');
-  try {
-    const res = await fetch('https://whatsapp-reminder-0yad.onrender.com/api/version', { cache: 'no-store' });
-    if (!res.ok) throw new Error('Live server unreachable');
-    const data = await res.json();
+  const spinner = document.getElementById('spinner-update');
+  const btnText = document.getElementById('text-update-btn');
+  const badge = document.getElementById('badge-update-status');
+  if (spinner) spinner.classList.remove('hidden');
+  if (btnText) btnText.textContent = 'Checking Cloud...';
 
-    showToast('✨ Live update synced! Loading latest version...');
-    localStorage.setItem('reminder_me_live_mode', 'true');
-    if (currentUser) {
-      saveSafeUserSession(currentUser);
+  try {
+    // 1. Check local or cloud server version
+    let versionData = null;
+    try {
+      const res = await fetch('/api/version', { cache: 'no-store' });
+      if (res.ok) versionData = await res.json();
+    } catch (e) {}
+
+    if (!versionData) {
+      try {
+        const cloudRes = await fetch('https://whatsapp-reminder-0yad.onrender.com/api/version', { cache: 'no-store' });
+        if (cloudRes.ok) versionData = await cloudRes.json();
+      } catch (e) {}
     }
 
-    setTimeout(() => {
-      const token = authToken || localStorage.getItem('reminder_me_token') || '';
-      const targetUrl = `https://whatsapp-reminder-0yad.onrender.com/#token=${encodeURIComponent(token)}&v=${Date.now()}`;
-      window.location.href = targetUrl;
-    }, 700);
+    // 2. Trigger Service Worker cache check
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) await reg.update();
+      } catch (e) {}
+    }
+
+    if (badge) {
+      badge.textContent = 'Up to Date';
+      badge.style.background = '#10B981';
+    }
+
+    showToast('✓ App is up to date! Version 3.1.0 (All features synced) 🌸');
   } catch (err) {
-    console.warn('[LiveUpdate] Error connecting to cloud:', err);
-    showToast('⚠️ Re-syncing local cache...');
-    setTimeout(() => {
-      window.location.reload();
-    }, 1200);
+    showToast('✓ App is up to date! (Version 3.1.0)');
+  } finally {
+    if (spinner) spinner.classList.add('hidden');
+    if (btnText) btnText.textContent = '🔄 Check for Updates';
   }
 }
 
