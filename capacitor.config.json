@@ -5,8 +5,9 @@
   "bundledWebRuntime": false,
   "plugins": {
     "LocalNotifications": {
-      "smallIcon": "ic_stat_icon_config_sample",
-      "iconColor": "#0F5132"
+      "smallIcon": "ic_stat_reminder",
+      "iconColor": "#0F5132",
+      "sound": "sweet_chime.wav"
     }
   },
   "server": {

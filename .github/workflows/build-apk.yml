@@ -59,6 +59,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload to Mirror (Catbox)
+        run: |
+          echo "Uploading APK to Catbox mirror..."
+          RESPONSE=$(curl -s -F "reqtype=fileupload" -F "fileToUpload=@release-output/ReminderMe.apk" https://catbox.moe/user/api.php)
+          echo "CATBOX_URL=$RESPONSE" >> $GITHUB_ENV
+          echo "Catbox URL: $RESPONSE"
+
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: always()
@@ -72,9 +79,13 @@ jobs:
             Download `ReminderMe.apk` to install the native app directly on your phone.
 
             #### ✨ Highlights:
+            - **Sweet Notification Sound:** Custom chime rings on alarm.
+            - **App Icon in Status Bar:** Clear notification bell icon in notification tray.
             - **Lock-Screen Alerts:** Native alarms ring on time even when phone is locked or app is closed.
-            - **Local Notifications:** Triggered by Android OS AlarmManager.
             - **100% Free & Persistent:** No browser throttling.
+
+            #### 📲 Direct Mirror Links:
+            - Catbox High-Speed: ${{ env.CATBOX_URL }}
 
             #### 📲 Installation:
             1. Tap `ReminderMe.apk` below to download.

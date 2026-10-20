@@ -27,6 +27,32 @@ function stringHashCode(str) {
   return Math.abs(hash);
 }
 
+const REMINDER_CHANNEL_ID = 'reminder_alarms_v4';
+
+async function initNativeNotificationChannel() {
+  try {
+    const Cap = window.Capacitor;
+    if (!Cap || !Cap.Plugins || !Cap.Plugins.LocalNotifications) return;
+    const LocalNotifications = Cap.Plugins.LocalNotifications;
+    
+    // Register high priority notification channel for Android 8.0+
+    await LocalNotifications.createChannel({
+      id: REMINDER_CHANNEL_ID,
+      name: 'Reminder Me Alarms',
+      description: 'High-priority reminder sound alerts and notifications',
+      importance: 5, // MAX importance (heads-up banner + sound)
+      visibility: 1, // Public on lockscreen
+      sound: 'sweet_chime.wav',
+      vibration: true,
+      lights: true,
+      lightColor: '#0F5132'
+    });
+    console.log('[Native] Notification channel initialized:', REMINDER_CHANNEL_ID);
+  } catch (err) {
+    console.warn('[Native] Channel init error:', err);
+  }
+}
+
 async function scheduleNativeLocalNotification(reminder) {
   try {
     const Cap = window.Capacitor;
@@ -36,6 +62,8 @@ async function scheduleNativeLocalNotification(reminder) {
     try {
       await LocalNotifications.requestPermissions();
     } catch (e) {}
+
+    await initNativeNotificationChannel();
 
     const triggerDate = new Date(reminder.reminderTimestamp || reminder.reminderTime);
     if (isNaN(triggerDate.getTime()) || triggerDate.getTime() <= Date.now()) return;
@@ -49,6 +77,11 @@ async function scheduleNativeLocalNotification(reminder) {
           title: '🌸 Reminder Me: ' + (reminder.title || 'Task Due'),
           body: (reminder.message && reminder.message !== reminder.title) ? reminder.message : 'Tap to view reminder details.',
           schedule: { at: triggerDate, allowWhileIdle: true },
+          channelId: REMINDER_CHANNEL_ID,
+          sound: 'sweet_chime.wav',
+          smallIcon: 'ic_stat_reminder',
+          largeIcon: 'ic_reminder_large',
+          iconColor: '#0F5132',
           extra: {
             reminderId: reminder.id,
             title: reminder.title,
@@ -57,7 +90,7 @@ async function scheduleNativeLocalNotification(reminder) {
         }
       ]
     });
-    console.log('[Native] Scheduled Android OS alarm for:', triggerDate.toLocaleString());
+    console.log('[Native] Scheduled Android OS alarm for:', triggerDate.toLocaleString(), 'Channel:', REMINDER_CHANNEL_ID);
   } catch (err) {
     console.warn('[Native LocalNotification] Scheduling error:', err);
   }
@@ -68,6 +101,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('DOMContentLoaded', () => {
     try {
       if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) {
+        initNativeNotificationChannel();
         window.Capacitor.Plugins.LocalNotifications.requestPermissions().catch(() => {});
         window.Capacitor.Plugins.LocalNotifications.addListener('localNotificationActionPerformed', (action) => {
           const extra = action && action.notification && action.notification.extra;
@@ -231,9 +265,39 @@ function showToast(msg, duration = 3000) {
   setTimeout(() => toastEl.classList.remove('show'), duration);
 }
 
-// Web app audio completely silenced - audio only comes from native device notifications
-function playNotificationChime() {}
-function playSynthChime() {}
+// Sweet Audio Chime (plays sweet_chime.wav or harmonious synth chime)
+function playNotificationChime() {
+  try {
+    const audio = new Audio('/sounds/sweet_chime.wav');
+    audio.play().catch(() => {
+      playSynthChime();
+    });
+  } catch (e) {
+    playSynthChime();
+  }
+}
+
+function playSynthChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const notes = [587.33, 880.00]; // D5, A5
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.15);
+      gain.gain.setValueAtTime(0, now + idx * 0.15);
+      gain.gain.linearRampToValueAtTime(0.3, now + idx * 0.15 + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.15 + 0.8);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.15);
+      osc.stop(now + idx * 0.15 + 0.85);
+    });
+  } catch (e) {}
+}
 
 // -------------------------------------------------------------
 // 📱 iOS STYLE TOP NOTIFICATION SLIDE-DOWN BANNER (Image 2)
@@ -241,6 +305,9 @@ function playSynthChime() {}
 function showIosNotificationBanner(reminder) {
   if (!reminder) return;
   activeViewingReminder = reminder;
+
+  // Play audio alert
+  playNotificationChime();
 
   iosBannerTitle.textContent = reminder.title || 'Reminder Alert';
   iosBannerMessage.textContent = reminder.message || reminder.title || 'Scheduled task is due';
@@ -976,6 +1043,7 @@ function openAestheticModalById(id) {
 function testPlayReminder(id) {
   const rem = currentReminders.find(r => r.id === id);
   if (rem) {
+    playNotificationChime();
     openAestheticModal(rem);
   }
 }
