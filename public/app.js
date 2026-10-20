@@ -223,11 +223,32 @@ if (typeof window !== 'undefined' && window.location.hash) {
 let authToken = localStorage.getItem('reminder_me_token') || null;
 let currentUser = null;
 
-// Restore cached user session immediately (prevents login screen bounce during updates)
+// Safe session storage helper: never store PII (email, phone, fullName) in localStorage
+function saveSafeUserSession(user) {
+  if (!user) return;
+  const safeSession = {
+    id: user.id,
+    planStatus: user.planStatus,
+    isOwner: user.isOwner,
+    lifetimeFree: user.lifetimeFree,
+    trialDaysRemaining: user.trialDaysRemaining
+  };
+  localStorage.setItem('reminder_me_cached_user', JSON.stringify(safeSession));
+}
+
+// Restore cached non-PII user session immediately (prevents login screen bounce during updates)
 const cachedUserStr = localStorage.getItem('reminder_me_cached_user');
 if (cachedUserStr) {
   try {
-    currentUser = JSON.parse(cachedUserStr);
+    const parsed = JSON.parse(cachedUserStr);
+    // Purge any legacy PII (email, phone, fullName) from localStorage if present
+    if (parsed.email || parsed.phone || parsed.fullName) {
+      delete parsed.email;
+      delete parsed.phone;
+      delete parsed.fullName;
+      saveSafeUserSession(parsed);
+    }
+    currentUser = parsed;
   } catch (e) {}
 }
 
@@ -1171,6 +1192,7 @@ document.getElementById('auth-form').addEventListener('submit', async (e) => {
     authToken = data.token;
     localStorage.setItem('reminder_me_token', authToken);
     currentUser = data.user;
+    saveSafeUserSession(currentUser);
 
     showToast('Welcome to Reminder Me!');
     initAppSession();
@@ -1221,7 +1243,7 @@ async function checkSession() {
     }
     const data = await res.json();
     currentUser = data.user;
-    localStorage.setItem('reminder_me_cached_user', JSON.stringify(currentUser));
+    saveSafeUserSession(currentUser);
     initAppSession();
     if (!currentUser.hasPushSubscription && 'Notification' in window && Notification.permission === 'granted') {
       ensurePushSubscription();
@@ -1347,6 +1369,7 @@ function updateUserBadge() {
 function logoutUser() {
   if (!confirm('Log out from Reminder Me?')) return;
   localStorage.removeItem('reminder_me_token');
+  localStorage.removeItem('reminder_me_cached_user');
   authToken = null;
   currentUser = null;
   showToast('Logged out');
@@ -1362,9 +1385,10 @@ async function deleteUserAccount() {
     });
     if (res.ok) {
       localStorage.removeItem('reminder_me_token');
+      localStorage.removeItem('reminder_me_cached_user');
       authToken = null;
       currentUser = null;
-      alert('Your account has been deleted.');
+      alert('Your account and personal data have been completely deleted.');
       location.reload();
     }
   } catch (e) {
@@ -1722,7 +1746,7 @@ async function triggerLiveAppUpdate() {
     showToast('✨ Live update synced! Loading latest version...');
     localStorage.setItem('reminder_me_live_mode', 'true');
     if (currentUser) {
-      localStorage.setItem('reminder_me_cached_user', JSON.stringify(currentUser));
+      saveSafeUserSession(currentUser);
     }
 
     setTimeout(() => {

@@ -101,7 +101,6 @@ if (!fs.existsSync(DATA_DIR)) {
 async function sendWebPushToUser(userId, payload) {
   try {
     const subs = await dbAsync.all('SELECT * FROM push_subscriptions WHERE userId = ?', [userId]);
-    console.log(`[WebPush] Dispatching to user ${userId}, active device subscriptions count: ${subs.length}`);
     const payloadStr = JSON.stringify(payload);
     for (const sub of subs) {
       try {
@@ -113,18 +112,16 @@ async function sendWebPushToUser(userId, payload) {
           TTL: 86400,
           urgency: 'high'
         };
-        const result = await webpush.sendNotification(pushConfig, payloadStr, options);
-        console.log(`[WebPush] Successfully pushed to ${sub.endpoint.substring(0, 45)}... (status: ${result.statusCode})`);
+        await webpush.sendNotification(pushConfig, payloadStr, options);
       } catch (err) {
-        console.error(`[WebPush] Failed push to ${sub.endpoint.substring(0, 45)}... error: ${err.statusCode || err.message}`);
+        console.error('[WebPush] Push notification delivery failed:', err.statusCode || err.message);
         if (err.statusCode === 410 || err.statusCode === 404) {
-          console.log(`[WebPush] Cleaning up inactive subscription ${sub.id}`);
           await dbAsync.run('DELETE FROM push_subscriptions WHERE id = ?', [sub.id]);
         }
       }
     }
   } catch (err) {
-    console.error('[WebPush] Error sending push to user:', err.message);
+    console.error('[WebPush] Error dispatching push:', err.message);
   }
 }
 
@@ -310,7 +307,7 @@ app.post('/api/auth/signup', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[Auth Signup Error]:', err);
+    console.error('[Auth Signup Error]:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -436,14 +433,15 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   });
 });
 
-// Delete My Account (DPDP Compliance)
+// Delete My Account (DPDP & GDPR Compliance)
 app.delete('/api/auth/delete-account', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     await dbAsync.run('DELETE FROM reminders WHERE userId = ?', [userId]);
     await dbAsync.run('DELETE FROM push_subscriptions WHERE userId = ?', [userId]);
+    await dbAsync.run('UPDATE coupons SET usedByUserId = null WHERE usedByUserId = ?', [userId]);
     await dbAsync.run('DELETE FROM users WHERE id = ?', [userId]);
-    res.json({ success: true, message: 'Your account and all associated data have been permanently deleted.' });
+    res.json({ success: true, message: 'Your account and all associated personal data have been permanently deleted.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -546,7 +544,6 @@ app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) =>
       receipt: `rcpt_${req.user.id.substring(0, 8)}_${Date.now()}`,
       notes: {
         userId: req.user.id,
-        userEmail: req.user.email,
         planType
       }
     };
@@ -726,7 +723,7 @@ app.post('/api/reminders', authMiddleware, async (req, res) => {
       scheduledTime
     });
   } catch (err) {
-    console.error('[Create Reminder Error]:', err);
+    console.error('[Create Reminder Error]:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -749,7 +746,7 @@ app.get('/api/reminders/due-notifications', authMiddleware, async (req, res) => 
 // Acknowledge in-app popup so it doesn't pop up again
 app.post('/api/reminders/:id/ack-popup', authMiddleware, async (req, res) => {
   try {
-    await dbAsync.run('UPDATE reminders SET clientPopped = 1 WHERE id = ?', [req.params.id]);
+    await dbAsync.run('UPDATE reminders SET clientPopped = 1 WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1365,12 +1362,12 @@ setInterval(async () => {
           await dbAsync.run('UPDATE reminders SET status = "sent", sentAt = ? WHERE id = ?', [now.toISOString(), reminder.id]);
         }
       } catch (sendErr) {
-        console.error(`[Scheduler] Failed reminder ${reminder.id}:`, sendErr.message);
+        console.error('[Scheduler] Failed reminder dispatch:', sendErr.message);
         await dbAsync.run('UPDATE reminders SET status = "failed", error = ? WHERE id = ?', [sendErr.message, reminder.id]);
       }
     }
   } catch (err) {
-    console.error('[Scheduler] Error in check loop:', err);
+    console.error('[Scheduler] Error in check loop:', err.message);
   }
 }, 5000);
 

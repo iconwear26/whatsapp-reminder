@@ -172,7 +172,7 @@ const dbAsync = {
       return { count: memoryDb.coupons.length };
     }
 
-    console.warn('[DB] Unhandled dbAsync.get:', sql, params);
+    console.warn('[DB] Unhandled dbAsync.get query:', sql);
     return null;
   },
 
@@ -232,7 +232,7 @@ const dbAsync = {
       });
     }
 
-    console.warn('[DB] Unhandled dbAsync.all:', sql, params);
+    console.warn('[DB] Unhandled dbAsync.all query:', sql);
     return [];
   },
 
@@ -516,10 +516,10 @@ const dbAsync = {
       return { changes: r ? 1 : 0 };
     }
 
-    // 19. UPDATE reminders SET clientPopped = 1 WHERE id = ?
+    // 19. UPDATE reminders SET clientPopped = 1 WHERE id = ? [AND userId = ?]
     if (s.includes('update reminders set clientpopped = 1')) {
-      const [id] = params;
-      const r = memoryDb.reminders.find(rem => rem.id === id);
+      const [id, userId] = params;
+      const r = memoryDb.reminders.find(rem => rem.id === id && (!userId || rem.userId === userId));
       if (r) {
         r.clientPopped = 1;
         saveDatabase();
@@ -527,7 +527,21 @@ const dbAsync = {
       return { changes: r ? 1 : 0 };
     }
 
-    console.warn('[DB] Unhandled dbAsync.run:', sql, params);
+    // 20. UPDATE coupons SET usedByUserId = null WHERE usedByUserId = ? (Account Deletion / Anonymization)
+    if (s.includes('update coupons set usedbyuserid = null where usedbyuserid =')) {
+      const [userId] = params;
+      let count = 0;
+      memoryDb.coupons.forEach(c => {
+        if (c.usedByUserId === userId) {
+          c.usedByUserId = null;
+          count++;
+        }
+      });
+      if (count > 0) saveDatabase();
+      return { changes: count };
+    }
+
+    console.warn('[DB] Unhandled dbAsync.run query:', sql);
     return { changes: 0 };
   }
 };
