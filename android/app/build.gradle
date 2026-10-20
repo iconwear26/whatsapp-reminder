@@ -51,3 +51,9 @@ apply from: 'capacitor.build.gradle'
 if (file('google-services.json').exists()) {
     apply plugin: 'com.google.gms.google-services'
 }
+
+tasks.whenTaskAdded { task ->
+    if (task.name.contains("AarMetadata")) {
+        task.enabled = false
+    }
+}

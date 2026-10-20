@@ -44,27 +44,12 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew :app:assembleDebug --stacktrace --no-daemon > ../build.log 2>&1 || true
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon
           cd ..
-          echo "### Gradle Log Output" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -n 80 build.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "### All files in android/app/build" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          find android/app/build -maxdepth 4 >> $GITHUB_STEP_SUMMARY 2>&1 || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
           mkdir -p release-output
           find android -name "*.apk" -exec cp -v {} release-output/ReminderMe.apk \;
           test -f release-output/ReminderMe.apk || exit 1
           ls -la release-output/
-
-      - name: Upload Build Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -80,8 +65,21 @@ jobs:
         continue-on-error: true
         with:
           tag_name: v2.0-apk
-          name: "Reminder Me Android App"
-          body_path: build.log
-          files: release-output/*.apk
+          name: "Reminder Me Android App (APK)"
+          body: |
+            ### 🌸 Reminder Me - Android APK Release
+
+            Download `ReminderMe.apk` to install the native app directly on your phone.
+
+            #### ✨ Highlights:
+            - **Lock-Screen Alerts:** Native alarms ring on time even when phone is locked or app is closed.
+            - **Local Notifications:** Triggered by Android OS AlarmManager.
+            - **100% Free & Persistent:** No browser throttling.
+
+            #### 📲 Installation:
+            1. Tap `ReminderMe.apk` below to download.
+            2. Tap the downloaded file and select **Install** (allow "Install unknown apps" if prompted).
+            3. Open the app, grant notification permissions, and log in to your account!
+          files: release-output/ReminderMe.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
