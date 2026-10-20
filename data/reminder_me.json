@@ -64,6 +64,370 @@
       "isUsed": 0,
       "usedByUserId": null,
       "usedAt": null
+    },
+    {
+      "code": "ADMIN-FOREVER-01",
+      "planType": "lifetime",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FOUNDER-VIP-PASS",
+      "planType": "lifetime",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-4Z9K2M",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-8H3P9X",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-2W7R5Y",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-9K4N2H",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-5T8D1W",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-3M6Y8V",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-7P2X4K",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-1H9J6Q",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-6V3L5T",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-4N8C7R",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-2K5W9P",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-8Y1M3X",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-9D4H6Z",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-5R7T2V",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-3X8N1K",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-7J2Q6W",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-1P5L4H",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-6C9Y3T",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-4W2V8M",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-8K6H5X",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-2T1R9Q",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-9M3N4Y",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-5H7P2W",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-3V8K1Z",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1M-7X4L6R",
+      "planType": "1month",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-9W2K5H",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-4M8P3T",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-1X7R9V",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-6N3L2W",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-8Y5H1K",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-2T9Q4M",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-5P1X8Z",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-3C7V6N",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-7K4J2Y",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-9D8W1Q",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-4H2M5T",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-1R6L9X",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-8W3N7P",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-2K9Y4H",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-6V1T8R",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-5M7X3K",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-3Q8P2W",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-7N5H1V",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-9T2L6M",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-4X9K5Q",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-1H3W8Y",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-6P4R2N",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-8V7K9Z",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-2M5W1T",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
+    },
+    {
+      "code": "FREE1Y-7J6X4P",
+      "planType": "1year",
+      "isUsed": 0,
+      "usedByUserId": null,
+      "usedAt": null
     }
   ],
   "push_subscriptions": [],

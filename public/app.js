@@ -206,8 +206,31 @@ const i18n = {
 };
 
 let currentLang = localStorage.getItem('reminder_me_lang') || 'en';
+
+// Extract token from URL hash if redirected from in-app live update
+if (typeof window !== 'undefined' && window.location.hash) {
+  try {
+    const hashStr = window.location.hash.substring(1);
+    const params = new URLSearchParams(hashStr);
+    const tokenParam = params.get('token');
+    if (tokenParam) {
+      localStorage.setItem('reminder_me_token', tokenParam);
+      history.replaceState(null, null, window.location.pathname);
+    }
+  } catch (e) {}
+}
+
 let authToken = localStorage.getItem('reminder_me_token') || null;
 let currentUser = null;
+
+// Restore cached user session immediately (prevents login screen bounce during updates)
+const cachedUserStr = localStorage.getItem('reminder_me_cached_user');
+if (cachedUserStr) {
+  try {
+    currentUser = JSON.parse(cachedUserStr);
+  } catch (e) {}
+}
+
 let selectedPlan = 'monthly';
 let currentReminders = [];
 let currentListSubtab = 'active'; // 'active' or 'msgbox'
@@ -1173,63 +1196,89 @@ async function checkSession() {
     return;
   }
 
+  // If session is already cached, immediately display active UI
+  if (currentUser) {
+    initAppSession();
+    switchNav('create');
+  }
+
   try {
     const res = await fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${authToken}` }
     });
     if (res.status === 401) {
       localStorage.removeItem('reminder_me_token');
+      localStorage.removeItem('reminder_me_cached_user');
       authToken = null;
+      currentUser = null;
       switchNav('auth');
       return;
     }
     if (!res.ok) {
-      console.warn('Temporary session check failure:', res.status);
+      console.warn('Temporary session check failure (sleeping or offline):', res.status);
+      if (currentUser) initAppSession();
       return;
     }
     const data = await res.json();
     currentUser = data.user;
+    localStorage.setItem('reminder_me_cached_user', JSON.stringify(currentUser));
     initAppSession();
     if (!currentUser.hasPushSubscription && 'Notification' in window && Notification.permission === 'granted') {
       ensurePushSubscription();
     }
   } catch (err) {
-    console.error('Session check error:', err);
+    console.warn('Session check offline fallback:', err);
+    if (currentUser) {
+      initAppSession();
+    }
   }
 }
 
 function initAppSession() {
+  if (!currentUser) return;
   updateUserBadge();
 
-  const isOwner = currentUser && currentUser.isOwner;
+  const isOwner = currentUser && (currentUser.isOwner || currentUser.planStatus === 'owner' || currentUser.lifetimeFree);
 
   if (isOwner) {
     if (navPlansBtn) navPlansBtn.classList.add('hidden');
     if (navAdminBtn) navAdminBtn.classList.remove('hidden');
-    document.getElementById('settings-owner-card').classList.remove('hidden');
-    document.getElementById('box-owner-plan-vip').classList.remove('hidden');
-    document.getElementById('box-regular-plans').classList.add('hidden');
+    const ownerCard = document.getElementById('settings-owner-card');
+    if (ownerCard) ownerCard.classList.remove('hidden');
+    const ownerBox = document.getElementById('box-owner-plan-vip');
+    if (ownerBox) ownerBox.classList.remove('hidden');
+    const regularPlans = document.getElementById('box-regular-plans');
+    if (regularPlans) regularPlans.classList.add('hidden');
   } else {
     if (navPlansBtn) navPlansBtn.classList.remove('hidden');
     if (navAdminBtn) navAdminBtn.classList.add('hidden');
-    document.getElementById('settings-owner-card').classList.add('hidden');
-    document.getElementById('box-owner-plan-vip').classList.add('hidden');
-    document.getElementById('box-regular-plans').classList.remove('hidden');
+    const ownerCard = document.getElementById('settings-owner-card');
+    if (ownerCard) ownerCard.classList.add('hidden');
+    const ownerBox = document.getElementById('box-owner-plan-vip');
+    if (ownerBox) ownerBox.classList.add('hidden');
+    const regularPlans = document.getElementById('box-regular-plans');
+    if (regularPlans) regularPlans.classList.remove('hidden');
 
     const isSubscribed = currentUser && (currentUser.planStatus === 'coupon_lifetime' || currentUser.planStatus === 'monthly' || currentUser.planStatus === 'yearly');
     const userActiveBox = document.getElementById('box-user-active-vip');
     if (isSubscribed) {
-      userActiveBox.classList.remove('hidden');
-      document.getElementById('user-active-plan-title').textContent =
-        currentUser.planStatus === 'coupon_lifetime' ? 'Lifetime VIP Access Active' : 'Subscription Active';
-      document.getElementById('btn-start-autopay').style.display = 'none';
+      if (userActiveBox) userActiveBox.classList.remove('hidden');
+      const planTitle = document.getElementById('user-active-plan-title');
+      if (planTitle) {
+        planTitle.textContent =
+          currentUser.planStatus === 'coupon_lifetime' ? 'Lifetime VIP Access Active' : 'Subscription Active';
+      }
+      const autopayBtn = document.getElementById('btn-start-autopay');
+      if (autopayBtn) autopayBtn.style.display = 'none';
     } else {
-      userActiveBox.classList.add('hidden');
-      document.getElementById('btn-start-autopay').style.display = 'block';
+      if (userActiveBox) userActiveBox.classList.add('hidden');
+      const autopayBtn = document.getElementById('btn-start-autopay');
+      if (autopayBtn) autopayBtn.style.display = 'block';
     }
   }
 
-  document.getElementById('user-email-chip').textContent = currentUser.email;
+  const emailChip = document.getElementById('user-email-chip');
+  if (emailChip) emailChip.textContent = currentUser.email || currentUser.phone || 'User';
 
   // Check Notification Permission
   const permBanner = document.getElementById('lockscreen-perm-banner');
@@ -1544,8 +1593,10 @@ function urlB64ToUint8Array(base64String) {
 }
 
 // -------------------------------------------------------------
-// EXCLUSIVE OWNER ADMIN PANEL
+// EXCLUSIVE OWNER ADMIN PANEL (Real-Time Users & Data View)
 // -------------------------------------------------------------
+let adminUsersList = [];
+
 async function loadAdminDashboard() {
   if (!authToken || !currentUser || !currentUser.isOwner) return;
   try {
@@ -1555,23 +1606,119 @@ async function loadAdminDashboard() {
     if (!res.ok) return;
     const data = await res.json();
 
-    document.getElementById('stat-total-users').textContent = data.stats.totalUsers;
-    document.getElementById('stat-active-trials').textContent = data.stats.activeTrials;
-    document.getElementById('stat-autopay-users').textContent = data.stats.activeAutopay;
-    document.getElementById('stat-revenue').textContent = '₹' + data.stats.totalRevenue;
+    const totalUsersEl = document.getElementById('stat-total-users');
+    if (totalUsersEl) totalUsersEl.textContent = data.stats.totalUsers || 0;
+    const totalRemsEl = document.getElementById('stat-total-reminders');
+    if (totalRemsEl) totalRemsEl.textContent = data.stats.totalReminders || 0;
+    const activeTrialsEl = document.getElementById('stat-active-trials');
+    if (activeTrialsEl) activeTrialsEl.textContent = data.stats.activeTrials || 0;
+    const autopayEl = document.getElementById('stat-autopay-users');
+    if (autopayEl) autopayEl.textContent = data.stats.activeAutopay || 0;
 
-    const tbody = document.getElementById('admin-users-tbody');
-    tbody.innerHTML = data.users.map(u => `
-      <tr>
-        <td><strong>${escapeHtml(u.fullName)}</strong>${u.isOwner ? ' 👑' : ''}</td>
-        <td>${escapeHtml(u.email)}</td>
-        <td>${escapeHtml(u.phone)}</td>
-        <td><span class="pill-tag" style="font-size:10px;">${u.planStatus}</span></td>
-        <td>${u.subscriptionExpiresAt ? new Date(u.subscriptionExpiresAt).toLocaleDateString() : 'Trial'}</td>
-      </tr>
-    `).join('');
+    adminUsersList = data.users || [];
+    renderAdminUsersTable(adminUsersList);
   } catch (err) {
     console.error('Admin dashboard error:', err);
+  }
+}
+
+function renderAdminUsersTable(users) {
+  const tbody = document.getElementById('admin-users-tbody');
+  if (!tbody) return;
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:18px; color:var(--text-secondary);">No users found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = users.map((u, idx) => {
+    const remList = u.reminders || [];
+    const hasRems = remList.length > 0;
+    const planPill = u.isOwner
+      ? '<span class="pill-tag" style="background:#10B981; color:#fff; font-size:10px;">👑 OWNER</span>'
+      : `<span class="pill-tag" style="font-size:10px;">${escapeHtml(u.planStatus)}</span>`;
+
+    const remDetailsHtml = hasRems
+      ? remList.map(r => `
+          <div style="background:#fff; border:1px solid #E5E7EB; border-radius:10px; padding:8px 12px; margin-top:6px; font-size:12px;">
+            <div style="font-weight:700; color:#1F2937;">📌 ${escapeHtml(r.title)}</div>
+            ${r.message && r.message !== r.title ? `<div style="color:#4B5563; font-size:11px;">${escapeHtml(r.message)}</div>` : ''}
+            <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:10px; color:#6B7280;">
+              <span>⏰ ${new Date(r.time).toLocaleString()}</span>
+              <span>Status: <b style="color:${r.status === 'completed' ? '#10B981' : '#F59E0B'}">${r.status}</b></span>
+            </div>
+            ${r.targetContactName ? `<div style="font-size:10px; color:#059669; margin-top:2px;">Target Contact: ${escapeHtml(r.targetContactName)}</div>` : ''}
+          </div>
+        `).join('')
+      : '<div style="font-size:11px; color:#9CA3AF; padding:6px 0;">No saved reminders for this user yet.</div>';
+
+    return `
+      <tr style="cursor:pointer;" onclick="toggleUserReminders('user-rem-${idx}')">
+        <td>
+          <strong>${escapeHtml(u.fullName || 'User')}</strong>${u.isOwner ? ' 👑' : ''}
+          <div style="font-size:10px; color:var(--text-secondary);">${hasRems ? `🔔 ${remList.length} reminders (Tap to view)` : '0 reminders'}</div>
+        </td>
+        <td>${escapeHtml(u.email || '-')}</td>
+        <td><strong>${escapeHtml(u.phone || '-')}</strong></td>
+        <td>${planPill}</td>
+        <td>${u.subscriptionExpiresAt ? new Date(u.subscriptionExpiresAt).toLocaleDateString() : 'Trial'}</td>
+      </tr>
+      <tr id="user-rem-${idx}" class="hidden" style="background:#F9FAFB;">
+        <td colspan="5" style="padding:12px 16px;">
+          <div style="font-weight:700; font-size:12px; margin-bottom:6px; color:#111827;">Saved Reminders (${remList.length}) for ${escapeHtml(u.fullName)}:</div>
+          ${remDetailsHtml}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function toggleUserReminders(rowId) {
+  const el = document.getElementById(rowId);
+  if (el) el.classList.toggle('hidden');
+}
+
+function filterAdminUsers() {
+  const searchInput = document.getElementById('admin-user-search');
+  const q = (searchInput ? searchInput.value : '').toLowerCase().trim();
+  if (!q) {
+    renderAdminUsersTable(adminUsersList);
+    return;
+  }
+  const filtered = adminUsersList.filter(u =>
+    (u.fullName && u.fullName.toLowerCase().includes(q)) ||
+    (u.phone && u.phone.includes(q)) ||
+    (u.email && u.email.toLowerCase().includes(q))
+  );
+  renderAdminUsersTable(filtered);
+}
+
+// -------------------------------------------------------------
+// INSTANT IN-APP LIVE UPDATE (No APK Re-download Required)
+// -------------------------------------------------------------
+async function triggerLiveAppUpdate() {
+  showToast('🔄 Connecting to live cloud server...');
+  try {
+    const res = await fetch('https://whatsapp-reminder-0yad.onrender.com/api/version', { cache: 'no-store' });
+    if (!res.ok) throw new Error('Live server unreachable');
+    const data = await res.json();
+
+    showToast('✨ Live update synced! Loading latest version...');
+    localStorage.setItem('reminder_me_live_mode', 'true');
+    if (currentUser) {
+      localStorage.setItem('reminder_me_cached_user', JSON.stringify(currentUser));
+    }
+
+    setTimeout(() => {
+      const token = authToken || localStorage.getItem('reminder_me_token') || '';
+      const targetUrl = `https://whatsapp-reminder-0yad.onrender.com/#token=${encodeURIComponent(token)}&v=${Date.now()}`;
+      window.location.href = targetUrl;
+    }, 700);
+  } catch (err) {
+    console.warn('[LiveUpdate] Error connecting to cloud:', err);
+    showToast('⚠️ Re-syncing local cache...');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1200);
   }
 }
 
@@ -1603,9 +1750,9 @@ function exportAdminDataCSV() {
   })
   .then(res => res.json())
   .then(data => {
-    let csv = 'ID,Full Name,Email,Phone,Plan Status,Trial Ends,Subscription Expires,Created At\n';
-    data.users.forEach(u => {
-      csv += `"${u.id}","${u.fullName}","${u.email}","${u.phone}","${u.planStatus}","${u.trialEndsAt}","${u.subscriptionExpiresAt || ''}","${u.createdAt}"\n`;
+    let csv = 'ID,Full Name,Email,Phone,Plan Status,Total Reminders,Trial Ends,Subscription Expires,Created At\n';
+    (data.users || []).forEach(u => {
+      csv += `"${u.id}","${u.fullName || ''}","${u.email || ''}","${u.phone || ''}","${u.planStatus || ''}","${u.remindersCount || 0}","${u.trialEndsAt || ''}","${u.subscriptionExpiresAt || ''}","${u.createdAt || ''}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

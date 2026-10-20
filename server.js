@@ -125,7 +125,12 @@ async function authMiddleware(req, res, next) {
     }
 
     req.user = user;
-    const isOwner = user.email.toLowerCase().trim() === OWNER_EMAIL || user.isOwner === 1;
+    const cleanPhone = sanitizePhone(user.phone || '');
+    const isOwner = (user.email || '').toLowerCase().trim() === OWNER_EMAIL ||
+                    cleanPhone === '918529062363' ||
+                    cleanPhone === '8529062363' ||
+                    user.isOwner === 1 ||
+                    user.planStatus === 'owner';
     req.isOwner = isOwner;
 
     // Check Plan & Access
@@ -419,7 +424,9 @@ app.post('/api/subscription/apply-coupon', authMiddleware, async (req, res) => {
     if (!coupon) {
       return res.status(400).json({ error: 'Invalid coupon code' });
     }
-    if (coupon.isUsed === 1) {
+
+    const isOwnerCode = cleanCode === 'OWNER-LIFETIME-VIP';
+    if (coupon.isUsed === 1 && !isOwnerCode && !coupon.isUnlimited) {
       return res.status(400).json({ error: 'This coupon has already been used' });
     }
 
@@ -427,31 +434,55 @@ app.post('/api/subscription/apply-coupon', authMiddleware, async (req, res) => {
     let newPlan = 'monthly';
     let expiresAt = null;
 
-    if (coupon.planType === 'lifetime' || cleanCode === 'OWNER-LIFETIME-VIP') {
+    if (isOwnerCode || coupon.planType === 'owner') {
+      newPlan = 'owner';
+      expiresAt = new Date(now.getTime() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString();
+      await dbAsync.run(`
+        UPDATE users SET planStatus = 'owner', isOwner = 1, subscriptionExpiresAt = ? WHERE id = ?
+      `, [expiresAt, req.user.id]);
+    } else if (coupon.planType === 'lifetime' || ['ADMIN-FOREVER-01', 'FOUNDER-VIP-PASS'].includes(cleanCode)) {
       newPlan = 'coupon_lifetime';
       expiresAt = new Date(now.getTime() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString();
-    } else if (coupon.planType === '1year') {
+      await dbAsync.run(`
+        UPDATE users SET planStatus = 'coupon_lifetime', subscriptionExpiresAt = ? WHERE id = ?
+      `, [expiresAt, req.user.id]);
+      await dbAsync.run('UPDATE coupons SET isUsed = 1, usedByUserId = ?, usedAt = ? WHERE code = ?', [
+        req.user.id,
+        now.toISOString(),
+        cleanCode
+      ]);
+    } else if (coupon.planType === '1year' || cleanCode.startsWith('FREE1Y-')) {
       newPlan = 'yearly';
       expiresAt = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      await dbAsync.run(`
+        UPDATE users SET planStatus = 'yearly', subscriptionExpiresAt = ? WHERE id = ?
+      `, [expiresAt, req.user.id]);
+      await dbAsync.run('UPDATE coupons SET isUsed = 1, usedByUserId = ?, usedAt = ? WHERE code = ?', [
+        req.user.id,
+        now.toISOString(),
+        cleanCode
+      ]);
     } else {
       newPlan = 'monthly';
       expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await dbAsync.run(`
+        UPDATE users SET planStatus = 'monthly', subscriptionExpiresAt = ? WHERE id = ?
+      `, [expiresAt, req.user.id]);
+      await dbAsync.run('UPDATE coupons SET isUsed = 1, usedByUserId = ?, usedAt = ? WHERE code = ?', [
+        req.user.id,
+        now.toISOString(),
+        cleanCode
+      ]);
     }
-
-    await dbAsync.run('UPDATE coupons SET isUsed = 1, usedByUserId = ?, usedAt = ? WHERE code = ?', [
-      req.user.id,
-      now.toISOString(),
-      cleanCode
-    ]);
-
-    await dbAsync.run(`
-      UPDATE users SET planStatus = ?, subscriptionExpiresAt = ? WHERE id = ?
-    `, [newPlan, expiresAt, req.user.id]);
 
     res.json({
       success: true,
-      message: `Coupon applied successfully! Plan upgraded to ${newPlan.toUpperCase()}`,
+      message: isOwnerCode
+        ? 'Owner Master VIP Plan activated! Lifetime 100% Free Forever.'
+        : `Coupon applied successfully! Plan upgraded to ${newPlan.toUpperCase()}`,
       planStatus: newPlan,
+      isOwner: isOwnerCode || req.user.isOwner === 1,
+      lifetimeFree: isOwnerCode || newPlan === 'coupon_lifetime' || newPlan === 'owner',
       expiresAt
     });
   } catch (err) {
@@ -1121,20 +1152,35 @@ app.get('/api/admin/stats', authMiddleware, ownerMiddleware, async (req, res) =>
       if (u.planStatus === 'yearly') totalRevenue += 154.00;
     });
 
-    // Strip sensitive passwords for display
-    const sanitizedUsers = allUsers.map(u => ({
-      id: u.id,
-      fullName: u.fullName,
-      email: u.email,
-      phone: u.phone,
-      planStatus: u.planStatus,
-      trialEndsAt: u.trialEndsAt,
-      subscriptionExpiresAt: u.subscriptionExpiresAt,
-      razorpaySubscriptionId: u.razorpaySubscriptionId || '-',
-      isOwner: u.isOwner === 1,
-      createdAt: u.createdAt,
-      lastLoginAt: u.lastLoginAt
-    }));
+    // Load all reminders to give owner full visibility into users' saved data
+    const allReminders = (await dbAsync.all('SELECT * FROM reminders ORDER BY reminderTime DESC')) || [];
+
+    // Strip sensitive passwords for display and attach reminders
+    const sanitizedUsers = allUsers.map(u => {
+      const userRems = allReminders.filter(r => r.userId === u.id);
+      return {
+        id: u.id,
+        fullName: u.fullName,
+        email: u.email,
+        phone: u.phone,
+        planStatus: u.planStatus,
+        trialEndsAt: u.trialEndsAt,
+        subscriptionExpiresAt: u.subscriptionExpiresAt,
+        razorpaySubscriptionId: u.razorpaySubscriptionId || '-',
+        isOwner: u.isOwner === 1 || u.planStatus === 'owner',
+        createdAt: u.createdAt,
+        lastLoginAt: u.lastLoginAt,
+        remindersCount: userRems.length,
+        reminders: userRems.map(r => ({
+          id: r.id,
+          title: r.title,
+          message: r.message,
+          time: r.reminderTime,
+          status: r.status,
+          targetContactName: r.targetContactName
+        }))
+      };
+    });
 
     res.json({
       stats: {
@@ -1143,13 +1189,26 @@ app.get('/api/admin/stats', authMiddleware, ownerMiddleware, async (req, res) =>
         activeAutopay,
         totalRevenue: totalRevenue.toFixed(2),
         totalCoupons: totalCouponsRow ? totalCouponsRow.count : 0,
-        usedCoupons: usedCouponsRow ? usedCouponsRow.count : 0
+        usedCoupons: usedCouponsRow ? usedCouponsRow.count : 0,
+        totalReminders: allReminders.length
       },
       users: sanitizedUsers
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// -------------------------------------------------------------
+// APP VERSION & INSTANT LIVE SYNC ENDPOINT
+// -------------------------------------------------------------
+app.get('/api/version', (req, res) => {
+  res.json({
+    version: '3.1.0',
+    build: '2026-10-20',
+    name: 'Reminder Me Luxury Live',
+    liveUrl: 'https://whatsapp-reminder-0yad.onrender.com'
+  });
 });
 
 // Admin Coupon Generator
