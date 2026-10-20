@@ -1,6 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 
+// Enforce TLS/SSL if external database connection string is configured in production
+if (process.env.DATABASE_URL) {
+  const url = process.env.DATABASE_URL.toLowerCase();
+  if (process.env.NODE_ENV === 'production' && !url.includes('sslmode=') && !url.includes('ssl=')) {
+    throw new Error('[DB SECURITY FATAL] External database connection in production must mandate TLS/SSL encryption (e.g. ?sslmode=require).');
+  }
+}
+
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });

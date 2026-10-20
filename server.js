@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -9,6 +11,62 @@ const jwt = require('jsonwebtoken');
 const Razorpay = require('razorpay');
 const webpush = require('web-push');
 const { dbAsync } = require('./db');
+
+// Ensure debug mode defaults to OFF
+const DEBUG = process.env.DEBUG === 'true';
+
+// -------------------------------------------------------------
+// 1. STRICT ENVIRONMENT VALIDATION PASS
+// -------------------------------------------------------------
+function validateEnvironment() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const missingCritical = [];
+  const missingWarnings = [];
+
+  // JWT Secret validation
+  if (!process.env.JWT_SECRET) {
+    if (isProd) {
+      missingCritical.push('JWT_SECRET: Required in production for secure token signing.');
+    } else {
+      missingWarnings.push('JWT_SECRET not provided; using ephemeral cryptographic key for dev.');
+    }
+  } else if (process.env.JWT_SECRET.length < 32) {
+    missingWarnings.push('JWT_SECRET is shorter than 32 characters; recommend 64 characters for production.');
+  }
+
+  // Owner credentials
+  if (!process.env.OWNER_EMAIL) {
+    missingWarnings.push('OWNER_EMAIL: Not set; owner privileges will not be auto-assigned.');
+  }
+
+  // Razorpay credentials
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    missingWarnings.push('RAZORPAY_KEY_ID/SECRET: Missing; running payment integration in simulated test mode.');
+  }
+
+  // WebPush VAPID
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    missingWarnings.push('VAPID_PUBLIC_KEY/PRIVATE_KEY: Missing; lock-screen push notifications disabled.');
+  }
+
+  // External database TLS check (if DATABASE_URL is supplied)
+  if (process.env.DATABASE_URL) {
+    const dbUrl = process.env.DATABASE_URL.toLowerCase();
+    if (isProd && !dbUrl.includes('sslmode=') && !dbUrl.includes('ssl=')) {
+      missingCritical.push('DATABASE_URL: External database in production must enforce TLS/SSL (e.g. ?sslmode=require).');
+    }
+  }
+
+  if (missingWarnings.length > 0) {
+    console.warn('[CONFIG WARNINGS]:\n  - ' + missingWarnings.join('\n  - '));
+  }
+
+  if (missingCritical.length > 0) {
+    console.error('[CRITICAL CONFIG ERROR] Application refusing to start due to missing security variables:\n  - ' + missingCritical.join('\n  - '));
+    process.exit(1);
+  }
+}
+validateEnvironment();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,23 +81,28 @@ function sanitizePhone(phone) {
 }
 
 // -------------------------------------------------------------
-// SECURE ENVIRONMENT VARIABLES & CREDENTIALS CONFIGURATION
+// 2. ERROR HANDLING HELPER (Opaque Client Message + Correlation ID)
 // -------------------------------------------------------------
-
-// 1. JWT Signing Secret (Server-side only)
-let JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('[SECURITY CRITICAL] Missing JWT_SECRET environment variable in production! Server shutting down.');
-    process.exit(1);
-  } else {
-    // Generate secure dynamic key in non-production environments
-    JWT_SECRET = crypto.randomBytes(32).toString('hex');
-    console.warn('[SECURITY WARNING] JWT_SECRET not found in environment. Using ephemeral cryptographic secret for this session.');
-  }
+function sendInternalError(res, err, publicMessage = 'An internal server error occurred.') {
+  const correlationId = 'err_' + Date.now().toString(36) + '_' + crypto.randomBytes(3).toString('hex');
+  console.error(`[CorrelationID: ${correlationId}]`, err && (err.stack || err.message || err));
+  return res.status(500).json({
+    error: publicMessage,
+    correlationId
+  });
 }
 
-// 2. Owner Identification (Environment Configured)
+// -------------------------------------------------------------
+// 3. SECURE ENVIRONMENT VARIABLES & CREDENTIALS CONFIGURATION
+// -------------------------------------------------------------
+
+// JWT Signing Secret (Server-side only)
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  JWT_SECRET = crypto.randomBytes(32).toString('hex');
+}
+
+// Owner Identification
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || '').toLowerCase().trim();
 const OWNER_ALT_EMAIL = (process.env.OWNER_ALT_EMAIL || '').toLowerCase().trim();
 const OWNER_PHONE = sanitizePhone(process.env.OWNER_PHONE || '');
@@ -56,14 +119,14 @@ function isOwnerUser(user) {
   return false;
 }
 
-// 3. Payment Gateway Config (Razorpay)
+// Payment Gateway Config (Razorpay)
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 const razorpay = (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET)
   ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET })
   : null;
 
-// 4. Web Push VAPID Configuration
+// Web Push VAPID Configuration
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 const VAPID_EMAIL = process.env.VAPID_EMAIL || (OWNER_EMAIL ? `mailto:${OWNER_EMAIL}` : 'mailto:support@reminderme.app');
@@ -76,7 +139,111 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   }
 }
 
-app.use(cors());
+// -------------------------------------------------------------
+// 4. SECURITY HEADERS (Helmet & Explicit Fallbacks)
+// -------------------------------------------------------------
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "https://whatsapp-reminder-0yad.onrender.com", "https://api.razorpay.com", "https://lumberjack.razorpay.com"],
+        frameSrc: ["'self'", "https://api.razorpay.com"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+      }
+    },
+    crossOriginEmbedderPolicy: false,
+    frameguard: { action: 'deny' }, // X-Frame-Options: DENY
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true
+    },
+    noSniff: true // X-Content-Type-Options: nosniff
+  })
+);
+
+// Fallback headers ensuring strict compliance across all endpoints
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  next();
+});
+
+// -------------------------------------------------------------
+// 5. RESTRICTED CORS CONFIGURATION
+// -------------------------------------------------------------
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim().toLowerCase())
+  : [
+      'https://whatsapp-reminder-0yad.onrender.com',
+      'capacitor://localhost',
+      'http://localhost',
+      'https://localhost'
+    ];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      const lower = origin.toLowerCase();
+      const isAllowed = allowedOrigins.some(
+        allowed => lower === allowed || lower.startsWith('http://localhost:') || lower.startsWith('http://127.0.0.1:')
+      );
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS request blocked by security policy'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+);
+
+// -------------------------------------------------------------
+// 6. RATE LIMITING
+// -------------------------------------------------------------
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 5, // Minimum: 5 attempts per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please wait 1 minute before trying again.' }
+});
+
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many accounts created from this IP. Please try again later.' }
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // Minimum: 3 attempts per hour
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Password reset request limit reached. Please wait 1 hour.' }
+});
+
+app.use('/api/', apiLimiter);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -220,7 +387,7 @@ function ownerMiddleware(req, res, next) {
 // -------------------------------------------------------------
 
 // Sign Up
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', signupLimiter, async (req, res) => {
   try {
     const { fullName, email, phone, password, agreedTerms } = req.body;
 
@@ -307,13 +474,12 @@ app.post('/api/auth/signup', async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('[Auth Signup Error]:', err.message);
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error processing registration');
   }
 });
 
-// Login
-app.post('/api/auth/login', async (req, res) => {
+// Login (Enforced 5 attempts per min rate-limiting)
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -340,7 +506,7 @@ app.post('/api/auth/login', async (req, res) => {
           ownerId,
           'Deepak Prajapat',
           cleanEmail,
-          '919876500000',
+          OWNER_PHONE || '918529062363',
           passwordHash,
           'owner',
           trialEnds.toISOString(),
@@ -408,8 +574,13 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error processing login');
   }
+});
+
+// Password Reset Endpoint (Enforced 3 attempts per hour rate-limiting)
+app.post('/api/auth/password-reset', passwordResetLimiter, (req, res) => {
+  return res.status(400).json({ error: 'Password reset is managed securely by the account administrator.' });
 });
 
 // Check Session / Current User
@@ -443,7 +614,7 @@ app.delete('/api/auth/delete-account', authMiddleware, async (req, res) => {
     await dbAsync.run('DELETE FROM users WHERE id = ?', [userId]);
     res.json({ success: true, message: 'Your account and all associated personal data have been permanently deleted.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error processing account deletion');
   }
 });
 
@@ -527,7 +698,7 @@ app.post('/api/subscription/apply-coupon', authMiddleware, async (req, res) => {
       expiresAt
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error applying coupon');
   }
 });
 
@@ -573,7 +744,7 @@ app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) =>
       planType
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error creating subscription order');
   }
 });
 
@@ -596,7 +767,7 @@ app.post('/api/subscription/verify-autopay', authMiddleware, async (req, res) =>
       expiresAt
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error verifying subscription');
   }
 });
 
@@ -613,7 +784,7 @@ app.get('/api/reminders', authMiddleware, async (req, res) => {
     );
     res.json(reminders);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error fetching reminders');
   }
 });
 
@@ -723,8 +894,7 @@ app.post('/api/reminders', authMiddleware, async (req, res) => {
       scheduledTime
     });
   } catch (err) {
-    console.error('[Create Reminder Error]:', err.message);
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error creating reminder');
   }
 });
 
@@ -739,7 +909,7 @@ app.get('/api/reminders/due-notifications', authMiddleware, async (req, res) => 
 
     res.json({ due: dueReminders });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error polling notifications');
   }
 });
 
@@ -749,7 +919,7 @@ app.post('/api/reminders/:id/ack-popup', authMiddleware, async (req, res) => {
     await dbAsync.run('UPDATE reminders SET clientPopped = 1 WHERE id = ? AND userId = ?', [req.params.id, req.user.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error acknowledging reminder');
   }
 });
 
@@ -816,7 +986,7 @@ app.post('/api/reminders/quick', authMiddleware, async (req, res) => {
       scheduledTime: targetDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error saving quick reminder');
   }
 });
 
@@ -881,7 +1051,7 @@ app.post('/api/reminders/custom', authMiddleware, async (req, res) => {
       scheduledTime: reminderDateTime.toLocaleString()
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error saving custom reminder');
   }
 });
 
@@ -954,7 +1124,7 @@ app.post('/api/reminders/daily', authMiddleware, async (req, res) => {
       scheduledTime: `Daily at ${time}` + (kisDateTak ? ` until ${kisDateTak}` : '')
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error saving daily reminder');
   }
 });
 
@@ -1056,7 +1226,7 @@ app.post('/api/reminders/contact', authMiddleware, async (req, res) => {
       shareMessage
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error creating contact reminder');
   }
 });
 
@@ -1082,7 +1252,7 @@ app.post('/api/reminders/:id/dismiss', authMiddleware, async (req, res) => {
 
     res.json({ success: true, message: 'Reminder dismissed' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error dismissing reminder');
   }
 });
 
@@ -1099,7 +1269,7 @@ app.post('/api/reminders/:id/snooze', authMiddleware, async (req, res) => {
 
     res.json({ success: true, message: `Snoozed for ${snoozeMinutes} minutes`, newTime });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error snoozing reminder');
   }
 });
 
@@ -1112,7 +1282,7 @@ app.delete('/api/reminders/:id', authMiddleware, async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error deleting reminder');
   }
 });
 
@@ -1147,7 +1317,7 @@ app.post('/api/push/subscribe', authMiddleware, async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error registering push subscription');
   }
 });
 
@@ -1167,7 +1337,7 @@ app.post('/api/push/test', authMiddleware, async (req, res) => {
     });
     res.json({ success: true, message: '✓ Test notification sent! Check your notification tray or lock screen.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error sending test push notification');
   }
 });
 
@@ -1243,7 +1413,7 @@ app.get('/api/admin/stats', authMiddleware, ownerMiddleware, async (req, res) =>
       users: sanitizedUsers
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error loading admin stats');
   }
 });
 
@@ -1274,7 +1444,7 @@ app.post('/api/admin/coupons/generate', authMiddleware, ownerMiddleware, async (
 
     res.json({ success: true, count: generated.length, codes: generated });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendInternalError(res, err, 'Error generating coupons');
   }
 });
 
@@ -1373,6 +1543,22 @@ setInterval(async () => {
 
 // Ping endpoint for keepalive
 app.get('/api/ping', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+
+// Global 404 API Handler
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// Centralized Global Error Handler Middleware (Opaque Error + Correlation ID)
+app.use((err, req, res, next) => {
+  const correlationId = 'err_' + Date.now().toString(36) + '_' + crypto.randomBytes(3).toString('hex');
+  console.error(`[CorrelationID: ${correlationId}] Global Handler:`, err && (err.stack || err.message || err));
+  const statusCode = err.status || (err.message && err.message.includes('CORS') ? 403 : 500);
+  res.status(statusCode).json({
+    error: statusCode === 403 ? err.message : 'An unexpected error occurred.',
+    correlationId
+  });
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Reminder Me Server running on port ${PORT}`);
