@@ -30,6 +30,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Direct High-Speed APK Download Endpoint
+app.get('/download/apk', (req, res) => {
+  const apkPath = path.join(__dirname, 'public', 'ReminderMe.apk');
+  if (fs.existsSync(apkPath)) {
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', 'attachment; filename="ReminderMe.apk"');
+    return res.sendFile(apkPath);
+  }
+  return res.redirect('https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk');
+});
+
 // Ensure data folder exists
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) {
