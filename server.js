@@ -244,7 +244,8 @@ const passwordResetLimiter = rateLimit({
 });
 
 app.use('/api/', apiLimiter);
-app.use(express.json());
+app.use(express.json({ limit: '64kb' }));
+app.use(express.urlencoded({ extended: false, limit: '64kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Direct High-Speed APK Download Endpoint
@@ -303,7 +304,14 @@ async function authMiddleware(req, res, next) {
 
   const token = authHeader.split(' ')[1];
   try {
+    const isRevoked = await dbAsync.get('SELECT * FROM revoked_tokens WHERE token = ?', [token]);
+    if (isRevoked) {
+      return res.status(401).json({ error: 'Token has been revoked. Please log in again.' });
+    }
+
     const decoded = jwt.verify(token, JWT_SECRET);
+    req.jwtDecoded = decoded;
+    req.token = token;
     let user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [decoded.userId]);
     if (!user) {
       if (decoded.userId === 'usr_owner_deepak') {
@@ -578,9 +586,105 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   }
 });
 
-// Password Reset Endpoint (Enforced 3 attempts per hour rate-limiting)
-app.post('/api/auth/password-reset', passwordResetLimiter, (req, res) => {
-  return res.status(400).json({ error: 'Password reset is managed securely by the account administrator.' });
+// Logout & Revoke JWT Token
+app.post('/api/auth/logout', authMiddleware, async (req, res) => {
+  try {
+    const token = req.token;
+    if (token) {
+      const decoded = req.jwtDecoded || {};
+      const expiresAt = decoded.exp ? new Date(decoded.exp * 1000).toISOString() : new Date(Date.now() + 365 * 86400000).toISOString();
+      await dbAsync.run('INSERT INTO revoked_tokens (token, expiresAt, revokedAt) VALUES (?, ?, ?)', [
+        token,
+        expiresAt,
+        new Date().toISOString()
+      ]);
+    }
+    res.json({ success: true, message: 'Logged out and session revoked successfully.' });
+  } catch (err) {
+    return sendInternalError(res, err, 'Error processing logout');
+  }
+});
+
+// Request Password Reset Token (15-min single-use cryptographically random token)
+app.post('/api/auth/forgot-password', passwordResetLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await dbAsync.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+
+    // Constant response prevents email enumeration
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If an account exists with this email, password reset instructions have been issued.'
+      });
+    }
+
+    // Invalidate any active reset tokens for this user
+    await dbAsync.run('UPDATE password_resets SET isUsed = 1 WHERE userId = ?', [user.id]);
+
+    // High entropy 256-bit random reset token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15-min max limit
+
+    const resetId = 'pr_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
+    await dbAsync.run(
+      'INSERT INTO password_resets (id, userId, tokenHash, expiresAt, isUsed, createdAt) VALUES (?, ?, ?, ?, 0, ?)',
+      [resetId, user.id, tokenHash, expiresAt, new Date().toISOString()]
+    );
+
+    res.json({
+      success: true,
+      message: 'If an account exists with this email, password reset instructions have been issued.',
+      ...(process.env.NODE_ENV !== 'production' ? { devResetToken: rawToken } : {})
+    });
+  } catch (err) {
+    return sendInternalError(res, err, 'Error processing password reset request');
+  }
+});
+
+// Confirm Password Reset with Single-Use Token
+app.post('/api/auth/reset-password', passwordResetLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Reset token and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(token.trim()).digest('hex');
+    const resetRecord = await dbAsync.get('SELECT * FROM password_resets WHERE tokenHash = ? AND isUsed = 0', [tokenHash]);
+
+    if (!resetRecord) {
+      return res.status(400).json({ error: 'Invalid or already used password reset token' });
+    }
+
+    if (new Date(resetRecord.expiresAt) <= new Date()) {
+      await dbAsync.run('UPDATE password_resets SET isUsed = 1 WHERE id = ?', [resetRecord.id]);
+      return res.status(400).json({ error: 'Password reset token has expired (15-minute validity exceeded)' });
+    }
+
+    // Hash new password using bcrypt
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    // Update user password and mark token used
+    await dbAsync.run('UPDATE users SET passwordHash = ? WHERE id = ?', [passwordHash, resetRecord.userId]);
+    await dbAsync.run('UPDATE password_resets SET isUsed = 1 WHERE id = ?', [resetRecord.id]);
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully. Please log in with your new password.'
+    });
+  } catch (err) {
+    return sendInternalError(res, err, 'Error resetting password');
+  }
 });
 
 // Check Session / Current User
@@ -702,17 +806,22 @@ app.post('/api/subscription/apply-coupon', authMiddleware, async (req, res) => {
   }
 });
 
-// Razorpay Autopay Order / Mandate Creation
+// Razorpay Autopay Order / Mandate Creation (Server-side price calculation only)
 app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) => {
   try {
-    const { planType } = req.body; // 'monthly' (₹20.50) or 'yearly' (₹154.00)
-    let amountPaise = 2050; // ₹20.50
-    if (planType === 'yearly') amountPaise = 15400; // ₹154.00
+    const { planType } = req.body;
+    if (planType !== 'monthly' && planType !== 'yearly') {
+      return res.status(400).json({ error: 'Invalid plan type selected. Must be monthly or yearly.' });
+    }
 
+    // Server-enforced pricing (client parameters like price/amount/discount are strictly ignored)
+    const amountPaise = planType === 'yearly' ? 15400 : 2050;
+
+    const receipt = `rcpt_${req.user.id.substring(0, 8)}_${Date.now()}`;
     const options = {
       amount: amountPaise,
       currency: 'INR',
-      receipt: `rcpt_${req.user.id.substring(0, 8)}_${Date.now()}`,
+      receipt,
       notes: {
         userId: req.user.id,
         planType
@@ -728,6 +837,9 @@ app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) =>
       }
     }
     if (!order) {
+      if (process.env.NODE_ENV === 'production' && RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET) {
+        return res.status(502).json({ error: 'Failed to create payment order with gateway.' });
+      }
       order = {
         id: 'order_simulated_' + Date.now(),
         amount: amountPaise,
@@ -735,6 +847,12 @@ app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) =>
         receipt: options.receipt
       };
     }
+
+    // Record order in database for server-side verification and replay prevention
+    await dbAsync.run(
+      'INSERT INTO orders (id, userId, planType, amountPaise, status, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
+      [order.id, req.user.id, planType, amountPaise, 'created', new Date().toISOString()]
+    );
 
     res.json({
       orderId: order.id,
@@ -748,26 +866,105 @@ app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) =>
   }
 });
 
-// Razorpay Autopay Verification
+// Razorpay Autopay Verification (HMAC-SHA256 signature verification & plan integrity)
 app.post('/api/subscription/verify-autopay', authMiddleware, async (req, res) => {
   try {
-    const { orderId, paymentId, planType } = req.body;
+    const orderId = req.body.orderId || req.body.razorpay_order_id;
+    const paymentId = req.body.paymentId || req.body.razorpay_payment_id;
+    const signature = req.body.signature || req.body.razorpay_signature;
+
+    if (!orderId || !paymentId) {
+      return res.status(400).json({ error: 'Missing required order or payment identifiers.' });
+    }
+
+    // 1. Verify that order exists and belongs to this user
+    const order = await dbAsync.get('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found in system records.' });
+    }
+    if (order.userId !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden: Order belongs to a different account.' });
+    }
+    if (order.status === 'paid') {
+      return res.status(400).json({ error: 'Order has already been processed.' });
+    }
+
+    // 2. Cryptographic signature check (mandatory when secret configured or in production)
+    if (RAZORPAY_KEY_SECRET) {
+      if (!signature) {
+        return res.status(400).json({ error: 'Missing cryptographic payment signature.' });
+      }
+      const payload = `${orderId}|${paymentId}`;
+      const expectedSignature = crypto
+        .createHmac('sha256', RAZORPAY_KEY_SECRET)
+        .update(payload)
+        .digest('hex');
+
+      const sigBuffer = Buffer.from(signature, 'utf8');
+      const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+
+      if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+        return res.status(400).json({ error: 'Invalid payment signature. Payment verification failed.' });
+      }
+    } else if (process.env.NODE_ENV === 'production') {
+      return res.status(500).json({ error: 'Payment gateway secret not configured.' });
+    }
+
+    // 3. Grant access based strictly on server's recorded planType (ignoring any client body claim)
+    const verifiedPlan = order.planType;
     const now = new Date();
-    const durationDays = planType === 'yearly' ? 365 : 30;
+    const durationDays = verifiedPlan === 'yearly' ? 365 : 30;
     const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString();
 
+    // Mark order as paid
+    await dbAsync.run('UPDATE orders SET status = ?, paymentId = ?, verifiedAt = ? WHERE id = ?', [
+      'paid',
+      paymentId,
+      now.toISOString(),
+      order.id
+    ]);
+
+    // Activate subscription
     await dbAsync.run(`
       UPDATE users SET planStatus = ?, subscriptionExpiresAt = ?, razorpaySubscriptionId = ? WHERE id = ?
-    `, [planType, expiresAt, paymentId || orderId, req.user.id]);
+    `, [verifiedPlan, expiresAt, paymentId, req.user.id]);
 
     res.json({
       success: true,
       message: `Subscription activated! Active until ${new Date(expiresAt).toDateString()}`,
-      planStatus: planType,
+      planStatus: verifiedPlan,
       expiresAt
     });
   } catch (err) {
     return sendInternalError(res, err, 'Error verifying subscription');
+  }
+});
+
+// Razorpay Webhook Endpoint (HMAC Signature Verified)
+app.post('/api/subscription/webhook', async (req, res) => {
+  try {
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_KEY_SECRET;
+    if (!webhookSecret) {
+      return res.status(501).json({ error: 'Webhook signature secret not configured' });
+    }
+    const signature = req.headers['x-razorpay-signature'];
+    if (!signature) {
+      return res.status(400).json({ error: 'Missing x-razorpay-signature header' });
+    }
+
+    const bodyStr = JSON.stringify(req.body);
+    const expected = crypto.createHmac('sha256', webhookSecret).update(bodyStr).digest('hex');
+
+    const sigBuffer = Buffer.from(signature, 'utf8');
+    const expectedBuffer = Buffer.from(expected, 'utf8');
+
+    if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+      return res.status(400).json({ error: 'Invalid webhook signature' });
+    }
+
+    res.json({ status: 'ok', received: true });
+  } catch (err) {
+    return sendInternalError(res, err, 'Error processing webhook event');
   }
 });
 

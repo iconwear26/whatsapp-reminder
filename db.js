@@ -76,6 +76,9 @@ const defaultData = {
     { code: 'FREE1Y-7J6X4P', planType: '1year', isUsed: 0, usedByUserId: null, usedAt: null }
   ],
   push_subscriptions: [],
+  orders: [],
+  revoked_tokens: [],
+  password_resets: [],
   app_settings: {}
 };
 
@@ -91,6 +94,9 @@ function loadDatabase() {
     parsed.reminders = parsed.reminders || [];
     parsed.coupons = parsed.coupons || [];
     parsed.push_subscriptions = parsed.push_subscriptions || [];
+    parsed.orders = parsed.orders || [];
+    parsed.revoked_tokens = parsed.revoked_tokens || [];
+    parsed.password_resets = parsed.password_resets || [];
     parsed.app_settings = parsed.app_settings || {};
 
     // Auto-heal any corrupted reminder status records
@@ -178,6 +184,22 @@ const dbAsync = {
     // 7. SELECT COUNT(*) as count FROM coupons
     if (s.includes('count(*)') && s.includes('from coupons')) {
       return { count: memoryDb.coupons.length };
+    }
+
+    // 8. SELECT * FROM revoked_tokens WHERE token = ?
+    if (s.includes('from revoked_tokens where token =')) {
+      const now = new Date();
+      return (memoryDb.revoked_tokens || []).find(t => t.token === params[0] && new Date(t.expiresAt) > now) || null;
+    }
+
+    // 9. SELECT * FROM orders WHERE id = ?
+    if (s.includes('from orders where id =')) {
+      return (memoryDb.orders || []).find(o => o.id === params[0]) || null;
+    }
+
+    // 10. SELECT * FROM password_resets WHERE tokenHash = ? AND isUsed = 0
+    if (s.includes('from password_resets where tokenhash =')) {
+      return (memoryDb.password_resets || []).find(p => p.tokenHash === params[0] && p.isUsed === 0) || null;
     }
 
     console.warn('[DB] Unhandled dbAsync.get query:', sql);
@@ -542,6 +564,71 @@ const dbAsync = {
       memoryDb.coupons.forEach(c => {
         if (c.usedByUserId === userId) {
           c.usedByUserId = null;
+          count++;
+        }
+      });
+      if (count > 0) saveDatabase();
+      return { changes: count };
+    }
+
+    // 21. INSERT INTO revoked_tokens (token, expiresAt, revokedAt) VALUES (?, ?, ?)
+    if (s.startsWith('insert into revoked_tokens')) {
+      const [token, expiresAt, revokedAt] = params;
+      memoryDb.revoked_tokens = memoryDb.revoked_tokens || [];
+      memoryDb.revoked_tokens.push({ token, expiresAt, revokedAt });
+      saveDatabase();
+      return { changes: 1 };
+    }
+
+    // 22. INSERT INTO orders (id, userId, planType, amountPaise, status, createdAt) VALUES (?, ?, ?, ?, ?, ?)
+    if (s.startsWith('insert into orders')) {
+      const [id, userId, planType, amountPaise, status, createdAt] = params;
+      memoryDb.orders = memoryDb.orders || [];
+      memoryDb.orders.push({ id, userId, planType, amountPaise, status, createdAt });
+      saveDatabase();
+      return { changes: 1 };
+    }
+
+    // 23. UPDATE orders SET status = ?, paymentId = ?, verifiedAt = ? WHERE id = ?
+    if (s.startsWith('update orders set status =')) {
+      const [status, paymentId, verifiedAt, id] = params;
+      const order = (memoryDb.orders || []).find(o => o.id === id);
+      if (order) {
+        order.status = status;
+        order.paymentId = paymentId;
+        order.verifiedAt = verifiedAt;
+        saveDatabase();
+      }
+      return { changes: order ? 1 : 0 };
+    }
+
+    // 24. INSERT INTO password_resets (id, userId, tokenHash, expiresAt, isUsed, createdAt) VALUES (?, ?, ?, ?, 0, ?)
+    if (s.startsWith('insert into password_resets')) {
+      const [id, userId, tokenHash, expiresAt, createdAt] = params;
+      memoryDb.password_resets = memoryDb.password_resets || [];
+      memoryDb.password_resets.push({ id, userId, tokenHash, expiresAt, isUsed: 0, createdAt });
+      saveDatabase();
+      return { changes: 1 };
+    }
+
+    // 25. UPDATE password_resets SET isUsed = 1 WHERE id = ?
+    if (s.includes('update password_resets set isused = 1 where id =')) {
+      const [id] = params;
+      const pr = (memoryDb.password_resets || []).find(p => p.id === id);
+      if (pr) {
+        pr.isUsed = 1;
+        saveDatabase();
+      }
+      return { changes: pr ? 1 : 0 };
+    }
+
+    // 26. UPDATE password_resets SET isUsed = 1 WHERE userId = ?
+    if (s.includes('update password_resets set isused = 1 where userid =')) {
+      const [userId] = params;
+      let count = 0;
+      (memoryDb.password_resets || []).forEach(p => {
+        if (p.userId === userId) {
+          p.isUsed = 1;
           count++;
         }
       });

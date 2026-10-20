@@ -861,6 +861,26 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
   }
 });
 
+function shareReminderById(id) {
+  const r = currentReminders.find(rem => rem.id === id);
+  if (!r) return;
+  const d = new Date(r.reminderTimestamp || r.reminderTime);
+  const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const cleanPhone = (r.targetContactPhone || '').replace(/[^0-9+]/g, '');
+  const text = `🔔 Reminder Me: "${r.title}" scheduled for ${dateFormatted}, ${timeFormatted}.\nOpen: ${window.location.origin}`;
+  if (navigator.share) {
+    navigator.share({
+      title: 'Reminder Me Alert',
+      text: text
+    }).catch(() => {
+      window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(text)}`;
+    });
+  } else {
+    window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(text)}`;
+  }
+}
+
 function shareReminderDirectly(phone, text) {
   const cleanPhone = (phone || '').replace(/[^0-9+]/g, '');
   if (navigator.share) {
@@ -972,7 +992,7 @@ function renderReminders() {
         const contactBadge = r.targetContactName ? `<span class="pill-tag">For: ${escapeHtml(r.targetContactName)}</span>` : '';
         const dailyBadge = isDaily ? `<span class="pill-tag">Daily (${r.repeatTime})</span>` : '';
         const shareContactBtn = r.targetContactPhone
-          ? `<button class="mini-btn mini-send" onclick="event.stopPropagation(); shareReminderDirectly('${r.targetContactPhone}', '🔔 Reminder Me: ${escapeHtml(r.title)} scheduled for ${dateFormatted}, ${timeFormatted}. Open: ${window.location.origin}')">Share 📲</button>`
+          ? `<button class="mini-btn mini-send" onclick="event.stopPropagation(); shareReminderById('${r.id}')">Share 📲</button>`
           : '';
 
         const snoozeBtn = isDelivered
@@ -1044,7 +1064,7 @@ function renderReminders() {
           : `<span class="pill-tag" style="background:#F3F4F6; color:var(--text-secondary);">${t.scheduledTag}</span>`;
 
         const shareContactBtn = r.targetContactPhone
-          ? `<button class="btn-msgbox-read" style="background:#FFFFFF; border:1px solid var(--border-subtle); color:var(--text-primary);" onclick="shareReminderDirectly('${r.targetContactPhone}', '🔔 Reminder Me: ${escapeHtml(r.title)} scheduled for ${dateFormatted}, ${timeFormatted}. Open: ${window.location.origin}')">Share 📲</button>`
+          ? `<button class="btn-msgbox-read" style="background:#FFFFFF; border:1px solid var(--border-subtle); color:var(--text-primary);" onclick="shareReminderById('${r.id}')">Share 📲</button>`
           : '';
 
         return `
@@ -1366,8 +1386,16 @@ function updateUserBadge() {
   }
 }
 
-function logoutUser() {
+async function logoutUser() {
   if (!confirm('Log out from Reminder Me?')) return;
+  try {
+    if (authToken) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+    }
+  } catch (e) {}
   localStorage.removeItem('reminder_me_token');
   localStorage.removeItem('reminder_me_cached_user');
   authToken = null;
@@ -1441,7 +1469,8 @@ async function startRazorpayAutopay() {
           body: JSON.stringify({
             planType: selectedPlan,
             paymentId: response.razorpay_payment_id,
-            orderId: response.razorpay_order_id
+            orderId: response.razorpay_order_id,
+            signature: response.razorpay_signature
           })
         });
         const verifyData = await verifyRes.json();
@@ -1853,7 +1882,13 @@ if (SpeechRecognition && quickMic) {
 
 function escapeHtml(str) {
   if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/`/g, '&#96;');
 }
 
 // Register PWA Service Worker immediately and listen for background push events

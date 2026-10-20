@@ -431,5 +431,8 @@
     }
   ],
   "push_subscriptions": [],
+  "orders": [],
+  "revoked_tokens": [],
+  "password_resets": [],
   "app_settings": {}
 }
