@@ -1,7 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Razorpay = require('razorpay');
@@ -10,37 +12,69 @@ const { dbAsync } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'reminder_me_super_secret_jwt_key_2026';
-const OWNER_EMAILS = [
-  'deepakprajapat852@gmail.com',
-  'deepakprajapat8529@gmail.com'
-];
+
+function sanitizePhone(phone) {
+  if (!phone) return '';
+  let cleaned = String(phone).replace(/[^0-9]/g, '');
+  if (cleaned.length === 10) {
+    cleaned = '91' + cleaned;
+  }
+  return cleaned;
+}
+
+// -------------------------------------------------------------
+// SECURE ENVIRONMENT VARIABLES & CREDENTIALS CONFIGURATION
+// -------------------------------------------------------------
+
+// 1. JWT Signing Secret (Server-side only)
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[SECURITY CRITICAL] Missing JWT_SECRET environment variable in production! Server shutting down.');
+    process.exit(1);
+  } else {
+    // Generate secure dynamic key in non-production environments
+    JWT_SECRET = crypto.randomBytes(32).toString('hex');
+    console.warn('[SECURITY WARNING] JWT_SECRET not found in environment. Using ephemeral cryptographic secret for this session.');
+  }
+}
+
+// 2. Owner Identification (Environment Configured)
+const OWNER_EMAIL = (process.env.OWNER_EMAIL || '').toLowerCase().trim();
+const OWNER_ALT_EMAIL = (process.env.OWNER_ALT_EMAIL || '').toLowerCase().trim();
+const OWNER_PHONE = sanitizePhone(process.env.OWNER_PHONE || '');
 
 function isOwnerUser(user) {
   if (!user) return false;
   const email = (user.email || '').toLowerCase().trim();
-  const phone = (user.phone || '').replace(/[^0-9]/g, '');
-  if (OWNER_EMAILS.includes(email) || email.includes('deepakprajapat')) return true;
-  if (phone.includes('8529062363')) return true;
+  const phone = sanitizePhone(user.phone || '');
+  if (OWNER_EMAIL && email === OWNER_EMAIL) return true;
+  if (OWNER_ALT_EMAIL && email === OWNER_ALT_EMAIL) return true;
+  if (OWNER_PHONE && phone === OWNER_PHONE) return true;
   if (user.isOwner === 1 || user.isOwner === true) return true;
   if (user.planStatus === 'owner') return true;
   return false;
 }
 
-const OWNER_EMAIL = 'deepakprajapat852@gmail.com';
+// 3. Payment Gateway Config (Razorpay)
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
+const razorpay = (RAZORPAY_KEY_ID && RAZORPAY_KEY_SECRET)
+  ? new Razorpay({ key_id: RAZORPAY_KEY_ID, key_secret: RAZORPAY_KEY_SECRET })
+  : null;
 
-// Razorpay Config (Keys from env or fallback placeholder)
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder_id',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_placeholder_secret'
-});
+// 4. Web Push VAPID Configuration
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_EMAIL = process.env.VAPID_EMAIL || (OWNER_EMAIL ? `mailto:${OWNER_EMAIL}` : 'mailto:support@reminderme.app');
 
-// WebPush VAPID config
-const vapidKeys = {
-  publicKey: process.env.VAPID_PUBLIC_KEY || 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U',
-  privateKey: process.env.VAPID_PRIVATE_KEY || 'UUxI4g7_8u_M9U53P72P_tA6y56o2k_cEaJ4i7XgKls'
-};
-webpush.setVapidDetails('mailto:supportrememberme@gmail.com', vapidKeys.publicKey, vapidKeys.privateKey);
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  } catch (err) {
+    console.error('[WebPush] Error initializing VAPID configuration:', err.message);
+  }
+}
 
 app.use(cors());
 app.use(express.json());
@@ -58,18 +92,9 @@ app.get('/download/apk', (req, res) => {
 });
 
 // Ensure data folder exists
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function sanitizePhone(phone) {
-  if (!phone) return '';
-  let cleaned = phone.replace(/[^0-9]/g, '');
-  if (cleaned.length === 10) {
-    cleaned = '91' + cleaned;
-  }
-  return cleaned;
 }
 
 // Send Web Push Notification to User
@@ -119,12 +144,13 @@ async function authMiddleware(req, res, next) {
     if (!user) {
       if (decoded.userId === 'usr_owner_deepak') {
         const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash('852906', salt);
+        const ownerPassword = process.env.OWNER_INITIAL_PASSWORD || crypto.randomBytes(8).toString('hex');
+        const passwordHash = await bcrypt.hash(ownerPassword, salt);
         user = {
           id: 'usr_owner_deepak',
           fullName: 'Deepak Prajapat',
           email: OWNER_EMAIL,
-          phone: '918529062363',
+          phone: OWNER_PHONE,
           passwordHash,
           planStatus: 'owner',
           trialEndsAt: new Date(Date.now() + 100 * 365 * 86400000).toISOString(),
@@ -526,9 +552,14 @@ app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) =>
     };
 
     let order = null;
-    try {
-      order = await razorpay.orders.create(options);
-    } catch (rzpErr) {
+    if (razorpay) {
+      try {
+        order = await razorpay.orders.create(options);
+      } catch (rzpErr) {
+        console.error('[Razorpay Order Error]:', rzpErr.message);
+      }
+    }
+    if (!order) {
       order = {
         id: 'order_simulated_' + Date.now(),
         amount: amountPaise,
@@ -541,7 +572,7 @@ app.post('/api/subscription/create-autopay', authMiddleware, async (req, res) =>
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder_id',
+      keyId: RAZORPAY_KEY_ID,
       planType
     });
   } catch (err) {
@@ -1092,7 +1123,10 @@ app.delete('/api/reminders/:id', authMiddleware, async (req, res) => {
 // WEB PUSH SUBSCRIPTIONS
 // -------------------------------------------------------------
 app.get('/api/push/public-key', (req, res) => {
-  res.json({ publicKey: vapidKeys.publicKey });
+  if (!VAPID_PUBLIC_KEY) {
+    return res.status(503).json({ error: 'Push notification service not configured' });
+  }
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
 
 app.post('/api/push/subscribe', authMiddleware, async (req, res) => {

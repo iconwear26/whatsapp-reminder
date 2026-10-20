@@ -6,4 +6,9 @@ data/*.db
 data/auth_baileys/
 auth_info_baileys/
 .env
+.env.local
+.env.*.local
+*.env
+data/reminders.json
+data/settings.json
 
