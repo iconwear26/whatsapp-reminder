@@ -1,11 +1,31 @@
-// Reminder Me - Luxury Edition (Version 3.0)
+// ReminderMe - Smart Daily Morning & Evening Reminder App (PWA & Native)
 
 // -------------------------------------------------------------
-// 🌐 SMART BACKEND RESOLUTION FOR WEB & ANDROID APK
+// 🌐 DYNAMIC DOMAIN & BACKEND RESOLUTION (NO HARDCODED LOCALHOST)
 // -------------------------------------------------------------
-const BACKEND_BASE = (window.location.protocol.startsWith('http') && !window.location.host.includes('localhost') && !window.location.host.includes('127.0.0.1'))
-  ? ''
-  : 'https://whatsapp-reminder-0yad.onrender.com';
+const OFFICIAL_DOMAIN = 'https://reminderme.in.net';
+
+function getLiveOrigin() {
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    const origin = window.location.origin;
+    if (origin.startsWith('http') && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+      return origin;
+    }
+  }
+  return OFFICIAL_DOMAIN;
+}
+
+// When inside Capacitor/Cordova app on phone (capacitor://localhost or file://), hit the cloud domain.
+// When inside any web browser (dev localhost, production reminderme.in.net, or Render), use relative path ('')
+const isNativeAppShell = (typeof window !== 'undefined' && (
+  window.location.protocol === 'capacitor:' ||
+  window.location.protocol === 'file:' ||
+  (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+));
+
+const BACKEND_BASE = isNativeAppShell
+  ? OFFICIAL_DOMAIN
+  : '';
 
 const originalFetch = window.fetch;
 window.fetch = function(resource, init) {
@@ -14,6 +34,129 @@ window.fetch = function(resource, init) {
   }
   return originalFetch.call(this, resource, init);
 };
+
+// -------------------------------------------------------------
+// 📲 PWA INSTALLATION & STANDALONE VIEW SWITCHER
+// -------------------------------------------------------------
+let deferredPrompt = null;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent default mini-infobar on mobile Chrome
+    e.preventDefault();
+    deferredPrompt = e;
+    console.log('[PWA] beforeinstallprompt captured successfully');
+    const headerInstall = document.getElementById('btn-header-install');
+    if (headerInstall) headerInstall.classList.add('pulse-glowing-btn');
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    console.log('[PWA] ReminderMe App successfully installed');
+    showToast('🎉 ReminderMe installed successfully on your device!');
+    applyAppDisplayMode();
+  });
+}
+
+function checkIsStandalone() {
+  if (typeof window === 'undefined') return false;
+  const isStandaloneMatch = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+  const isIosStandalone = (window.navigator && window.navigator.standalone === true);
+  const isAndroidReferrer = document.referrer && document.referrer.includes('android-app://');
+  const isCapacitorNative = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+  return !!(isStandaloneMatch || isIosStandalone || isAndroidReferrer || isCapacitorNative);
+}
+
+function applyAppDisplayMode() {
+  const isStandalone = checkIsStandalone();
+  const landingHero = document.getElementById('landing-hero');
+  const headerInstallBtn = document.getElementById('btn-header-install');
+
+  if (isStandalone) {
+    document.body.classList.add('is-standalone-app');
+    if (landingHero) landingHero.style.display = 'none';
+    if (headerInstallBtn) headerInstallBtn.style.display = 'none';
+    console.log('[PWA] Standalone App Mode Active -> Direct to Dashboard');
+  } else {
+    document.body.classList.remove('is-standalone-app');
+    const skipped = sessionStorage.getItem('reminderme_skip_landing');
+    if (skipped === '1' && landingHero) {
+      landingHero.style.display = 'none';
+    }
+  }
+}
+
+async function triggerPwaInstall() {
+  if (deferredPrompt) {
+    try {
+      deferredPrompt.prompt();
+      const choiceResult = await deferredPrompt.userChoice;
+      if (choiceResult && choiceResult.outcome === 'accepted') {
+        showToast('✓ Installing ReminderMe App...');
+        deferredPrompt = null;
+      }
+    } catch (err) {
+      console.warn('[PWA] Installation prompt error:', err);
+      openPwaInstallModal();
+    }
+  } else {
+    // If prompt is unavailable (e.g. iOS Safari, desktop or already installed), open helper modal
+    openPwaInstallModal();
+  }
+}
+
+function openPwaInstallModal() {
+  const modal = document.getElementById('pwa-install-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    const isAndroid = /android/.test(window.navigator.userAgent.toLowerCase());
+    const iosBox = document.getElementById('pwa-guide-ios');
+    const androidBox = document.getElementById('pwa-guide-android');
+    const desktopBox = document.getElementById('pwa-guide-desktop');
+
+    if (isIos && iosBox) {
+      iosBox.style.borderColor = 'var(--emerald-primary)';
+      iosBox.style.background = 'rgba(16, 185, 129, 0.08)';
+    } else if (isAndroid && androidBox) {
+      androidBox.style.borderColor = 'var(--emerald-primary)';
+      androidBox.style.background = 'rgba(16, 185, 129, 0.08)';
+    } else if (desktopBox) {
+      desktopBox.style.borderColor = 'var(--emerald-primary)';
+      desktopBox.style.background = 'rgba(16, 185, 129, 0.08)';
+    }
+  }
+}
+
+function closePwaInstallModal() {
+  const modal = document.getElementById('pwa-install-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function scrollToAppView() {
+  const target = document.getElementById('view-auth') || document.querySelector('.app-main');
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function continueToWebApp() {
+  sessionStorage.setItem('reminderme_skip_landing', '1');
+  const landingHero = document.getElementById('landing-hero');
+  if (landingHero) {
+    landingHero.style.display = 'none';
+  }
+  showToast('✓ Welcome to ReminderMe Web App!');
+}
+
+// Check display mode immediately on script evaluation
+if (typeof window !== 'undefined') {
+  applyAppDisplayMode();
+  if (window.matchMedia) {
+    window.matchMedia('(display-mode: standalone)').addEventListener('change', applyAppDisplayMode);
+  }
+}
 
 // -------------------------------------------------------------
 // 📱 NATIVE ANDROID CAPACITOR ALARMS & NOTIFICATIONS
@@ -38,7 +181,7 @@ async function initNativeNotificationChannel() {
     // Register high priority notification channel for Android 8.0+
     await LocalNotifications.createChannel({
       id: REMINDER_CHANNEL_ID,
-      name: 'Reminder Me Alarms',
+      name: 'ReminderMe Alarms',
       description: 'High-priority reminder sound alerts and notifications',
       importance: 5, // MAX importance (heads-up banner + sound)
       visibility: 1, // Public on lockscreen
@@ -74,7 +217,7 @@ async function scheduleNativeLocalNotification(reminder) {
       notifications: [
         {
           id: notifId,
-          title: '🌸 Reminder Me: ' + (reminder.title || 'Task Due'),
+          title: '🌸 ReminderMe: ' + (reminder.title || 'Task Due'),
           body: (reminder.message && reminder.message !== reminder.title) ? reminder.message : 'Tap to view reminder details.',
           schedule: { at: triggerDate, allowWhileIdle: true },
           channelId: REMINDER_CHANNEL_ID,
@@ -120,7 +263,7 @@ if (typeof window !== 'undefined') {
 // Localization Dictionaries (English Default & Hindi)
 const i18n = {
   en: {
-    appName: 'Reminder Me',
+    appName: 'ReminderMe',
     trialText: '10-Day Free Trial',
     trialDaysLeft: '{days} Days Left',
     create: 'Create',
@@ -156,13 +299,13 @@ const i18n = {
     lockScreenNotif: 'Lock-Screen Notifications & Tone',
     enablePush: 'Enable Push Alerts',
     customerSupport: 'Customer Support',
-    shareApp: 'Share Reminder Me App',
+    shareApp: 'Share ReminderMe App',
     logout: 'Log Out',
     deleteAccount: 'Delete My Account & Data',
     switchLangBtn: 'हिन्दी'
   },
   hi: {
-    appName: 'Reminder Me',
+    appName: 'ReminderMe',
     trialText: '10 दिन का फ्री ट्रायल',
     trialDaysLeft: '{days} दिन शेष',
     create: 'बनाएं',
@@ -868,10 +1011,10 @@ function shareReminderById(id) {
   const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
   const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   const cleanPhone = (r.targetContactPhone || '').replace(/[^0-9+]/g, '');
-  const text = `🔔 Reminder Me: "${r.title}" scheduled for ${dateFormatted}, ${timeFormatted}.\nOpen: ${window.location.origin}`;
+  const text = `🔔 ReminderMe: "${r.title}" scheduled for ${dateFormatted}, ${timeFormatted}.\nOpen: ${getLiveOrigin()}`;
   if (navigator.share) {
     navigator.share({
-      title: 'Reminder Me Alert',
+      title: 'ReminderMe Alert',
       text: text
     }).catch(() => {
       window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(text)}`;
@@ -885,7 +1028,7 @@ function shareReminderDirectly(phone, text) {
   const cleanPhone = (phone || '').replace(/[^0-9+]/g, '');
   if (navigator.share) {
     navigator.share({
-      title: 'Reminder Me Alert',
+      title: 'ReminderMe Alert',
       text: text
     }).catch(() => {
       window.location.href = `sms:${cleanPhone}?body=${encodeURIComponent(text)}`;
@@ -1214,7 +1357,7 @@ document.getElementById('auth-form').addEventListener('submit', async (e) => {
     currentUser = data.user;
     saveSafeUserSession(currentUser);
 
-    showToast('Welcome to Reminder Me!');
+    showToast('Welcome to ReminderMe!');
     initAppSession();
     switchNav('create');
 
@@ -1387,7 +1530,7 @@ function updateUserBadge() {
 }
 
 async function logoutUser() {
-  if (!confirm('Log out from Reminder Me?')) return;
+  if (!confirm('Log out from ReminderMe?')) return;
   try {
     if (authToken) {
       await fetch('/api/auth/logout', {
@@ -1455,7 +1598,7 @@ async function startRazorpayAutopay() {
       key: data.keyId,
       amount: data.amount,
       currency: data.currency,
-      name: 'Reminder Me',
+      name: 'ReminderMe',
       description: `Autopay (${selectedPlan.toUpperCase()})`,
       image: '/icons/icon.svg',
       handler: async function (response) {
@@ -1973,18 +2116,26 @@ function exportAdminDataCSV() {
 // SHARE APP & VOICE MIC
 // -------------------------------------------------------------
 function shareReminderMeApp() {
+  const liveDomain = getLiveOrigin();
+  const shareMessage = `Download ReminderMe App for smart morning & evening reminders: ${liveDomain}`;
   const shareData = {
-    title: 'Reminder Me',
-    text: 'Try Reminder Me - Elegant in-app alarms and push alerts for all your daily tasks!',
-    url: window.location.origin
+    title: 'ReminderMe',
+    text: shareMessage,
+    url: liveDomain
   };
 
   if (navigator.share) {
     navigator.share(shareData).catch(() => {});
   } else {
-    navigator.clipboard.writeText(window.location.origin).then(() => {
-      showToast('App link copied to clipboard');
-    });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareMessage).then(() => {
+        showToast('✓ Share link copied to clipboard!');
+      }).catch(() => {
+        prompt('Copy ReminderMe Share Link:', shareMessage);
+      });
+    } else {
+      prompt('Copy ReminderMe Share Link:', shareMessage);
+    }
   }
 }
 

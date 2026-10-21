@@ -1,5 +1,5 @@
-// Service Worker for Reminder Me App
-const CACHE_NAME = 'reminder-me-v8';
+// Service Worker for ReminderMe App (PWA)
+const CACHE_NAME = 'reminderme-pwa-v10';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -10,6 +10,7 @@ const ASSETS_TO_CACHE = [
   '/icons/icon-512.png',
   '/icons/badge-96.png',
   '/icons/icon.svg',
+  '/sounds/sweet_chime.wav',
   '/images/art_morning_sun.jpg',
   '/images/art_mountain_sunrise.jpg',
   '/images/art_lotus_water.jpg',
@@ -21,7 +22,11 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE).catch(err => console.log('Cache addAll notice:', err)))
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS_TO_CACHE).catch(err => {
+        console.warn('[SW] Cache addAll warning (non-fatal):', err);
+      });
+    })
   );
 });
 
@@ -39,15 +44,46 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.url.includes('/api/')) return;
+  // Never intercept API endpoints or external payment gateways
+  if (e.request.url.includes('/api/') || e.request.url.includes('razorpay.com')) {
+    return;
+  }
+
+  // Network first with cache fallback for navigation / documents
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(e.request).then(cached => cached || caches.match('/index.html') || caches.match('/')))
+    );
+    return;
+  }
+
+  // Stale-while-revalidate for static assets
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    caches.match(e.request).then((cachedResponse) => {
+      const fetchPromise = fetch(e.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const toCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, toCache));
+        }
+        return networkResponse;
+      }).catch(() => null);
+
+      return cachedResponse || fetchPromise;
+    })
   );
 });
 
 // Push notification received - Bulletproof Native Lock-Screen Notification
 self.addEventListener('push', (e) => {
-  let data = { title: '🔔 Reminder Me', body: 'You have a scheduled reminder!' };
+  let data = { title: '🔔 ReminderMe', body: 'You have a scheduled reminder!' };
   if (e.data) {
     try {
       data = e.data.json();
@@ -56,7 +92,7 @@ self.addEventListener('push', (e) => {
     }
   }
 
-  const title = data.title || '🔔 Reminder Me';
+  const title = data.title || '🔔 ReminderMe';
   const options = {
     body: data.body || 'Scheduled task is due now.',
     icon: '/icons/icon-192.png',
@@ -103,12 +139,9 @@ self.addEventListener('notificationclick', (e) => {
   }
 
   e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      for (const client of windowClients) {
-        if (client.url.includes('/') && 'focus' in client) {
-          if (remId) {
-            client.postMessage({ type: 'OPEN_REMINDER_MODAL', reminderId: remId });
-          }
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
           return client.focus();
         }
       }

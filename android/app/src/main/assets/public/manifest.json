@@ -1,11 +1,15 @@
 {
-  "name": "Reminder Me",
+  "name": "ReminderMe",
   "short_name": "ReminderMe",
-  "description": "Smart In-App & Lock-Screen Reminders",
+  "description": "Smart Daily Morning & Evening Reminder App with Voice-to-Text and Sweet Notifications",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#F4EFEA",
+  "background_color": "#FAFAF9",
   "theme_color": "#0F5132",
+  "orientation": "portrait-primary",
+  "id": "com.reminderme.app",
+  "categories": ["productivity", "utilities", "lifestyle"],
   "gcm_sender_id": "103953800507",
   "icons": [
     {

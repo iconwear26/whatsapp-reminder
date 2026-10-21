@@ -3,10 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#FFFFFF">
+  <meta name="theme-color" content="#0F5132">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>Reminder Me</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ReminderMe">
+  <meta name="description" content="ReminderMe is the smart daily productivity app for automated morning routines, evening wrap-ups, voice-to-text task scheduling, and soothing sweet chime alerts.">
+  <title>ReminderMe - Smart Daily Morning & Evening Reminder App</title>
+
+  <!-- Canonical & OpenGraph Meta Tags -->
+  <link rel="canonical" href="https://reminderme.in.net">
+  <meta property="og:title" content="ReminderMe - Smart Daily Morning & Evening Reminder App">
+  <meta property="og:description" content="Stay organized effortlessly with morning & evening automated reminders, voice-to-text task entry, sweet chime tones, and lock-screen alerts.">
+  <meta property="og:url" content="https://reminderme.in.net">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ReminderMe">
+  <meta property="og:image" content="https://reminderme.in.net/icons/icon-512.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ReminderMe - Smart Daily Morning & Evening Reminder App">
+  <meta name="twitter:description" content="Stay organized effortlessly with morning & evening automated reminders, voice-to-text task entry, sweet chime tones, and lock-screen alerts.">
+  <meta name="twitter:image" content="https://reminderme.in.net/icons/icon-512.png">
+
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,7 +71,7 @@
             </svg>
           </div>
           <div>
-            <h1 class="brand-name">Reminder Me</h1>
+            <h1 class="brand-name">ReminderMe</h1>
             <div id="trial-badge" class="trial-badge">
               <span id="trial-text">10-Day Free Trial</span>
             </div>
@@ -59,6 +79,11 @@
         </div>
 
         <div class="header-controls">
+          <!-- Prominent Glowing Download App Button in Header -->
+          <button id="btn-header-install" class="btn-header-download pulse-glowing-btn" onclick="triggerPwaInstall()" title="Download ReminderMe App">
+            <span class="btn-icon">📲</span>
+            <span class="btn-text">Download App</span>
+          </button>
           <!-- Instant In-App Sync / Update Button -->
           <button id="btn-header-update" class="header-icon-btn" title="Sync Cloud Update" onclick="triggerLiveAppUpdate()" style="color:var(--emerald-primary); background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); font-size:11px; font-weight:700; padding:6px 10px; border-radius:20px; display:inline-flex; align-items:center; gap:4px;">
             <span style="font-size:13px;">🔄</span> Update
@@ -68,7 +93,7 @@
             <span id="lang-label">हिन्दी</span>
           </button>
           <!-- Share App Button -->
-          <button id="share-app-btn" class="header-icon-btn" title="Share App">
+          <button id="share-app-btn" class="header-icon-btn" title="Share ReminderMe App">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="18" cy="5" r="3"></circle>
               <circle cx="6" cy="12" r="3"></circle>
@@ -80,6 +105,96 @@
         </div>
       </div>
     </header>
+
+    <!-- ============================================== -->
+    <!-- LANDING PAGE & PWA HERO BANNER (WEBSITE VIEW) -->
+    <!-- ============================================== -->
+    <section id="landing-hero" class="landing-hero-card">
+      <div class="hero-badge-pill">
+        <span class="badge-sparkle">✨</span>
+        <span>Official App • reminderme.in.net</span>
+      </div>
+
+      <h2 class="hero-title">
+        Never Miss a Moment with <span class="hero-title-accent">ReminderMe</span>
+      </h2>
+
+      <p class="hero-subtitle">
+        Your smart daily companion for automated morning routines, peaceful evening reminders, voice-to-text task scheduling, and calming sweet chime notifications right on your phone & desktop.
+      </p>
+
+      <!-- Primary Action CTA Banner -->
+      <div class="hero-cta-group">
+        <button type="button" class="btn-download-pwa pulse-glowing-btn" onclick="triggerPwaInstall()">
+          <span class="cta-icon">📲</span>
+          <div class="cta-text-wrap">
+            <span class="cta-title">Download ReminderMe App</span>
+            <span class="cta-sub">1-Click Install • Free & Fast • Offline Ready</span>
+          </div>
+        </button>
+
+        <div class="hero-secondary-actions">
+          <button type="button" class="btn-ghost-action" onclick="scrollToAppView()">
+            <span>🚀 Open Web Dashboard</span>
+          </button>
+          <button type="button" class="btn-ghost-action" onclick="openPwaInstallModal()">
+            <span>ℹ️ Install Guide</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Core Features Grid (4 Feature Cards) -->
+      <div class="hero-features-grid">
+        <!-- Feature 1 -->
+        <div class="hero-feat-card">
+          <div class="feat-icon-bubble">🌅</div>
+          <div class="feat-content">
+            <h3 class="feat-title">Morning & Evening Reminders</h3>
+            <p class="feat-desc">Kickstart every morning with your priorities and wrap up your evenings with calm, automated routine checklists.</p>
+          </div>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="hero-feat-card">
+          <div class="feat-icon-bubble">🎙️</div>
+          <div class="feat-content">
+            <h3 class="feat-title">Voice-to-Text Task Entry</h3>
+            <p class="feat-desc">Speak naturally into your microphone — ReminderMe automatically transcribes, schedules, and saves tasks in 1 second.</p>
+          </div>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="hero-feat-card">
+          <div class="feat-icon-bubble">🔔</div>
+          <div class="feat-content">
+            <h3 class="feat-title">Smart Lock-Screen Alerts</h3>
+            <p class="feat-desc">Rings on time with soothing sweet chime bells and clear status-bar icons that keep you peacefully notified.</p>
+          </div>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="hero-feat-card">
+          <div class="feat-icon-bubble">🌿</div>
+          <div class="feat-content">
+            <h3 class="feat-title">Free Daily Productivity</h3>
+            <p class="feat-desc">Clean, distraction-free aesthetic with pre-built categories (Daily, Health, Work, Custom) and instant cloud sync.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trust Badges & Web Switcher -->
+      <div class="hero-footer-bar">
+        <div class="platform-chips">
+          <span class="chip-item">📱 Android PWA</span>
+          <span class="chip-item">🍏 iOS Safari</span>
+          <span class="chip-item">💻 Chrome / Edge</span>
+          <span class="chip-item">🔒 100% Secure</span>
+        </div>
+        <button type="button" class="btn-text-link" onclick="continueToWebApp()">
+          Continue using in Web Browser &rarr;
+        </button>
+      </div>
+    </section>
 
     <!-- Lock-Screen Notification Notice Bar -->
     <div id="lockscreen-perm-banner" class="lockscreen-notice-card hidden">
@@ -497,7 +612,7 @@
           <!-- Share App Button -->
           <div class="form-group mt-3">
             <button type="button" class="btn-pill btn-secondary" onclick="shareReminderMeApp()">
-              Share Reminder Me App
+              Share ReminderMe App
             </button>
           </div>
 
@@ -705,6 +820,76 @@
         <div id="modal-user-reminders" style="max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
           <!-- Dynamically populated -->
         </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- PWA INSTALLATION HELPER MODAL (iOS, Android, Desktop) -->
+    <!-- ============================================== -->
+    <div id="pwa-install-modal" class="modal-overlay hidden" onclick="if(event.target === this) closePwaInstallModal();">
+      <div class="aesthetic-card-box pwa-install-dialog" style="max-width: 440px; padding: 22px; text-align: left;" onclick="event.stopPropagation()">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 38px; height: 38px; border-radius: 12px; background: #0F3826; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px;">
+              📲
+            </div>
+            <div>
+              <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">Install ReminderMe</h3>
+              <p style="font-size: 11px; color: var(--text-secondary); margin: 0;">Add to your device for instant offline access</p>
+            </div>
+          </div>
+          <button type="button" class="mini-btn mini-delete" onclick="closePwaInstallModal()" style="font-size: 16px;">✕</button>
+        </div>
+
+        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 14px;">
+          ReminderMe is a Progressive Web App (PWA). Follow these simple steps to install it on your device:
+        </p>
+
+        <!-- Device Guide: iOS -->
+        <div id="pwa-guide-ios" class="install-guide-box" style="border: 1px solid var(--border-subtle); border-radius: 14px; padding: 12px; margin-bottom: 10px; background: #FAF9F6;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span style="font-size: 16px;">🍏</span>
+            <strong style="font-size: 13px; color: var(--text-primary);">iPhone / iPad (Safari)</strong>
+          </div>
+          <ol style="font-size: 12px; color: var(--text-secondary); padding-left: 20px; line-height: 1.5; margin: 0;">
+            <li>Tap the <strong>Share</strong> button (box with upward arrow) in Safari.</li>
+            <li>Scroll down and tap <strong>"Add to Home Screen"</strong> ➕.</li>
+            <li>Tap <strong>"Add"</strong> in the top right corner. ReminderMe will install on your home screen!</li>
+          </ol>
+        </div>
+
+        <!-- Device Guide: Android -->
+        <div id="pwa-guide-android" class="install-guide-box" style="border: 1px solid var(--border-subtle); border-radius: 14px; padding: 12px; margin-bottom: 10px; background: #FAF9F6;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span style="font-size: 16px;">🤖</span>
+            <strong style="font-size: 13px; color: var(--text-primary);">Android (Chrome / Samsung)</strong>
+          </div>
+          <ol style="font-size: 12px; color: var(--text-secondary); padding-left: 20px; line-height: 1.5; margin: 0;">
+            <li>Tap the <strong>3 dots menu (⋮)</strong> in the browser.</li>
+            <li>Select <strong>"Install App"</strong> or <strong>"Add to Home screen"</strong>.</li>
+            <li>Confirm <strong>"Install"</strong>.</li>
+          </ol>
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.1);">
+            <a href="https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk" class="btn-pill btn-secondary" style="display: block; text-align: center; font-size: 11px; padding: 6px 12px; text-decoration: none;">
+              📥 Or Download Direct Android APK
+            </a>
+          </div>
+        </div>
+
+        <!-- Device Guide: Desktop -->
+        <div id="pwa-guide-desktop" class="install-guide-box" style="border: 1px solid var(--border-subtle); border-radius: 14px; padding: 12px; margin-bottom: 14px; background: #FAF9F6;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <span style="font-size: 16px;">💻</span>
+            <strong style="font-size: 13px; color: var(--text-primary);">Windows / Mac / Desktop</strong>
+          </div>
+          <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+            Click the <strong>Install icon (⊕)</strong> on the right side of the browser address bar in Chrome or Edge, or select <strong>Menu &rarr; "Install ReminderMe"</strong>.
+          </p>
+        </div>
+
+        <button type="button" class="btn-pill btn-forest w-full" onclick="closePwaInstallModal()" style="font-weight: 700; padding: 10px 18px;">
+          Got it! 👍
+        </button>
       </div>
     </div>
 
