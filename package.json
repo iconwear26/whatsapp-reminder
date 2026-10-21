@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "ReminderMe - Smart Daily Morning & Evening Reminder App",
   "scripts": {
+    "build": "echo 'Static site ready'",
     "start": "node server.js",
     "cap:sync": "cap sync android"
   },

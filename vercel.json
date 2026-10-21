@@ -1,10 +1,8 @@
 {
   "outputDirectory": "public",
-  "redirects": [
-    { "source": "/", "destination": "/index.html", "permanent": false }
-  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://whatsapp-reminder-0yad.onrender.com/api/$1" },
-    { "source": "/download/apk", "destination": "https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk" }
+    { "source": "/download/apk", "destination": "https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
