@@ -1017,7 +1017,7 @@ function shareReminderById(id) {
   const timeFormatted = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
   const dateFormatted = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   const cleanPhone = (r.targetContactPhone || '').replace(/[^0-9+]/g, '');
-  const text = `🔔 ReminderMe: "${r.title}" scheduled for ${dateFormatted}, ${timeFormatted}.\nOpen: ${getLiveOrigin()}`;
+  const text = `🔔 ReminderMe: "${r.title}" scheduled for ${dateFormatted}, ${timeFormatted}.\nOpen: https://reminderme-app.vercel.app`;
   if (navigator.share) {
     navigator.share({
       title: 'ReminderMe Alert',
@@ -2128,7 +2128,7 @@ function exportAdminDataCSV() {
 // SHARE APP & VOICE MIC
 // -------------------------------------------------------------
 function shareReminderMeApp() {
-  const liveDomain = getLiveOrigin();
+  const liveDomain = 'https://reminderme-app.vercel.app';
   const shareMessage = `Download ReminderMe App for smart morning & evening reminders: ${liveDomain}`;
   const shareData = {
     title: 'ReminderMe',
