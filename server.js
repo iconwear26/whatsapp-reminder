@@ -19,6 +19,10 @@ const DEBUG = process.env.DEBUG === 'true';
 // 1. STRICT ENVIRONMENT VALIDATION PASS
 // -------------------------------------------------------------
 function validateEnvironment() {
+  // If running in Vercel serverless / edge, bypass strict process exit
+  if (process.env.VERCEL) {
+    return;
+  }
   const isProd = process.env.NODE_ENV === 'production';
   const missingCritical = [];
   const missingWarnings = [];

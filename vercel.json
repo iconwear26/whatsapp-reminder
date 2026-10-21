@@ -1,5 +1,7 @@
 {
+  "buildCommand": null,
   "outputDirectory": "public",
+  "cleanUrls": true,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://whatsapp-reminder-0yad.onrender.com/api/$1" },
     { "source": "/download/apk", "destination": "https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk" },

@@ -1,0 +1,6 @@
+server.js
+db.js
+data/
+android/
+.env*
+.git
