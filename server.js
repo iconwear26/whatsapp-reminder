@@ -155,7 +155,7 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
-        connectSrc: ["'self'", "https://reminderme.in.net", "http://reminderme.in.net", "https://whatsapp-reminder-0yad.onrender.com", "https://api.razorpay.com", "https://lumberjack.razorpay.com"],
+        connectSrc: ["'self'", "https://reminderme-app.vercel.app", "https://whatsapp-reminder-ecru.vercel.app", "https://reminderme.in.net", "https://whatsapp-reminder-0yad.onrender.com", "https://api.razorpay.com", "https://lumberjack.razorpay.com"],
         frameSrc: ["'self'", "https://api.razorpay.com"],
         objectSrc: ["'none'"],
         upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
@@ -186,8 +186,9 @@ app.use((req, res, next) => {
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim().toLowerCase())
   : [
+      'https://reminderme-app.vercel.app',
+      'https://whatsapp-reminder-ecru.vercel.app',
       'https://reminderme.in.net',
-      'http://reminderme.in.net',
       'https://whatsapp-reminder-0yad.onrender.com',
       'capacitor://localhost',
       'http://localhost',
@@ -1443,7 +1444,7 @@ app.post('/api/reminders/contact', authMiddleware, async (req, res) => {
     }
 
     const timeFormatted = targetDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
-    const publicUrl = process.env.PUBLIC_APP_URL || 'https://reminderme.in.net';
+    const publicUrl = process.env.PUBLIC_APP_URL || 'https://reminderme-app.vercel.app';
     const shareMessage = `🔔 ReminderMe: "${title.trim()}" scheduled for ${timeFormatted} by ${req.user.fullName || 'a friend'}.\nOpen ReminderMe: ${publicUrl}/`;
 
     const createdContact = {
@@ -1673,7 +1674,7 @@ app.get('/api/version', (req, res) => {
     version: '3.2.0',
     build: '2026-10-21',
     name: 'ReminderMe Production PWA',
-    liveUrl: process.env.PUBLIC_APP_URL || 'https://reminderme.in.net'
+    liveUrl: process.env.PUBLIC_APP_URL || 'https://reminderme-app.vercel.app'
   });
 });
 

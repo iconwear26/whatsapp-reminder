@@ -3,7 +3,7 @@
 // -------------------------------------------------------------
 // 🌐 DYNAMIC DOMAIN & BACKEND RESOLUTION (NO HARDCODED LOCALHOST)
 // -------------------------------------------------------------
-const OFFICIAL_DOMAIN = 'https://reminderme.in.net';
+const OFFICIAL_DOMAIN = 'https://reminderme-app.vercel.app';
 
 function getLiveOrigin() {
   if (typeof window !== 'undefined' && window.location && window.location.origin) {

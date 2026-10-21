@@ -1,27 +1,8 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "public/**/*",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "https://whatsapp-reminder-0yad.onrender.com/api/$1"
-    },
-    {
-      "src": "/download/apk",
-      "dest": "https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk"
-    },
-    {
-      "src": "/",
-      "dest": "/public/index.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/public/$1"
-    }
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://whatsapp-reminder-0yad.onrender.com/api/$1" },
+    { "source": "/download/apk", "destination": "https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
