@@ -1,8 +1,7 @@
 {
   "name": "reminder-me",
   "version": "2.0.0",
-  "description": "Reminder Me - Smart In-App & Push Notification Reminders",
-  "main": "server.js",
+  "description": "ReminderMe - Smart Daily Morning & Evening Reminder App",
   "scripts": {
     "start": "node server.js",
     "cap:sync": "cap sync android"
