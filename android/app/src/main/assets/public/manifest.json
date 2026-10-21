@@ -1,6 +1,6 @@
 {
-  "name": "ReminderMe",
-  "short_name": "ReminderMe",
+  "name": "Reminder Me",
+  "short_name": "Reminder Me",
   "description": "Smart Daily Morning & Evening Reminder App with Voice-to-Text and Sweet Notifications",
   "start_url": "/",
   "scope": "/",
@@ -23,11 +23,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
     }
   ]
 }

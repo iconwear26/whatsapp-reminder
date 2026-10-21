@@ -27,7 +27,8 @@
   <meta name="twitter:description" content="Stay organized effortlessly with morning & evening automated reminders, voice-to-text task entry, sweet chime tones, and lock-screen alerts.">
   <meta name="twitter:image" content="https://reminderme-app.vercel.app/icons/icon-512.png">
 
-  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="icon" type="image/png" href="/icons/icon-192.png">
+  <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="manifest" href="/manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -93,14 +94,11 @@
     <header class="app-header">
       <div class="header-inner">
         <div class="brand">
-          <div class="brand-logo-disc">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
+          <div class="brand-logo-disc" style="background:transparent; box-shadow:none; padding:0; display:flex; align-items:center; justify-content:center; border:none;">
+            <img src="/icons/icon-192.png" alt="Reminder Me" style="width:38px; height:38px; border-radius:10px; object-fit:contain; box-shadow: 0 4px 10px rgba(0,0,0,0.18);">
           </div>
           <div>
-            <h1 class="brand-name">ReminderMe</h1>
+            <h1 class="brand-name">Reminder Me</h1>
             <div id="trial-badge" class="trial-badge">
               <span id="trial-text">10-Day Free Trial</span>
             </div>
@@ -859,11 +857,11 @@
       <div class="aesthetic-card-box pwa-install-dialog" style="max-width: 440px; padding: 22px; text-align: left;" onclick="event.stopPropagation()">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="width: 38px; height: 38px; border-radius: 12px; background: #0F3826; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px;">
-              📲
+            <div style="width: 38px; height: 38px; border-radius: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+              <img src="/icons/icon-192.png" alt="Reminder Me" style="width: 100%; height: 100%; object-fit: contain;">
             </div>
             <div>
-              <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">Install ReminderMe</h3>
+              <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">Install Reminder Me</h3>
               <p style="font-size: 11px; color: var(--text-secondary); margin: 0;">Add to your device for instant offline access</p>
             </div>
           </div>

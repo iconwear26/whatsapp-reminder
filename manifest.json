@@ -1,0 +1,28 @@
+{
+  "name": "Reminder Me",
+  "short_name": "Reminder Me",
+  "description": "Smart Daily Morning & Evening Reminder App with Voice-to-Text and Sweet Notifications",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FAFAF9",
+  "theme_color": "#0F5132",
+  "orientation": "portrait-primary",
+  "id": "com.reminderme.app",
+  "categories": ["productivity", "utilities", "lifestyle"],
+  "gcm_sender_id": "103953800507",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
