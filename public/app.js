@@ -750,6 +750,12 @@ function applyLanguage(lang) {
   if (lblBannerSub) lblBannerSub.textContent = t.lockScreenSub;
 
   updateUserBadge();
+
+  // Automatically hide marketing landing hero when user is logged into the app
+  const landingHero = document.getElementById('landing-hero');
+  if (landingHero) {
+    landingHero.style.display = 'none';
+  }
   renderReminders();
 }
 
@@ -1440,6 +1446,12 @@ function initAppSession() {
   }
 
   updateUserBadge();
+
+  // Automatically hide marketing landing hero when user is logged into the app
+  const landingHero = document.getElementById('landing-hero');
+  if (landingHero) {
+    landingHero.style.display = 'none';
+  }
 
   if (isOwner) {
     if (navPlansBtn) navPlansBtn.classList.add('hidden');
