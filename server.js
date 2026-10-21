@@ -1763,7 +1763,8 @@ app.post('/api/admin/clean-tests', authMiddleware, ownerMiddleware, async (req, 
 // -------------------------------------------------------------
 // BACKGROUND DISPATCHER SCHEDULER (Push Notifications)
 // -------------------------------------------------------------
-setInterval(async () => {
+if (!process.env.VERCEL) {
+  setInterval(async () => {
   try {
     const now = new Date();
     const pendingReminders = await dbAsync.all(
@@ -1852,6 +1853,7 @@ setInterval(async () => {
     console.error('[Scheduler] Error in check loop:', err.message);
   }
 }, 5000);
+}
 
 // Ping endpoint for keepalive
 app.get('/api/ping', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
