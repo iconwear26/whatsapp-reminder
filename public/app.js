@@ -455,6 +455,15 @@ function showToast(msg, duration = 3000) {
 // Sweet Audio Chime (plays sweet_chime.wav or harmonious synth chime)
 function playNotificationChime() {
   try {
+    const preloadedAudio = document.getElementById('notif-chime-audio');
+    if (preloadedAudio) {
+      preloadedAudio.currentTime = 0;
+      preloadedAudio.play().catch(() => {
+        const audio = new Audio('/sounds/sweet_chime.wav');
+        audio.play().catch(() => playSynthChime());
+      });
+      return;
+    }
     const audio = new Audio('/sounds/sweet_chime.wav');
     audio.play().catch(() => {
       playSynthChime();
@@ -607,17 +616,19 @@ async function markAestheticDone() {
 
   if (isAlreadyDone) return;
 
-  try {
-    const res = await fetch(`/api/reminders/${id}/dismiss`, {
+  const rem = currentReminders.find(r => r.id === id) || activeViewingReminder;
+  if (rem) {
+    rem.status = 'completed';
+    rem.clientPopped = 1;
+    addLocalReminder(rem);
+    showToast('✓ Marked as completed');
+  }
+
+  if (authToken) {
+    fetch(`/api/reminders/${id}/dismiss`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${authToken}` }
-    });
-    if (res.ok) {
-      showToast('✓ Marked as completed');
-      loadReminders();
-    }
-  } catch (e) {
-    console.error('Error marking done:', e);
+    }).catch(() => {});
   }
 }
 
@@ -792,6 +803,54 @@ function switchNav(targetView) {
 }
 
 // -------------------------------------------------------------
+// LOCAL OFFLINE-FIRST REMINDER STORAGE & SYNC
+// -------------------------------------------------------------
+function getLocalReminders() {
+  try {
+    const raw = localStorage.getItem('reminder_me_local_reminders');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveLocalReminders(list) {
+  try {
+    localStorage.setItem('reminder_me_local_reminders', JSON.stringify(list || []));
+  } catch (e) {}
+}
+
+function addLocalReminder(rem) {
+  if (!rem || !rem.id) return;
+  const list = getLocalReminders();
+  const filtered = list.filter(r => r.id !== rem.id);
+  filtered.unshift(rem);
+  saveLocalReminders(filtered);
+
+  // Update currentReminders in memory
+  currentReminders = currentReminders.filter(r => r.id !== rem.id);
+  currentReminders.unshift(rem);
+  renderReminders();
+  scheduleReminderTimers([rem]);
+}
+
+function continueAsGuest() {
+  if (!currentUser) {
+    currentUser = {
+      id: 'guest_' + Date.now(),
+      fullName: 'Guest User',
+      planStatus: 'trial',
+      isGuest: true,
+      trialDaysRemaining: 10
+    };
+    saveSafeUserSession(currentUser);
+  }
+  switchNav('create');
+  showToast('✓ Quick Start active — reminders will save on your phone!');
+  loadReminders();
+}
+
+// -------------------------------------------------------------
 // CREATE REMINDER MODES (ACCURATE LOCAL TIME)
 // -------------------------------------------------------------
 function switchCreateMode(mode) {
@@ -827,37 +886,51 @@ async function quickSave(minutes, preset) {
 
   const reminderTimestamp = targetDate.getTime();
   const reminderTime = targetDate.toISOString();
+  const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-  try {
-    const res = await fetch('/api/reminders/quick', {
+  // 1. Immediately save locally & schedule precision alarm so reminder NEVER fails!
+  const localRem = {
+    id: 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+    userId: currentUser ? currentUser.id : 'guest',
+    title: message,
+    message: message,
+    reminderTime,
+    reminderTimestamp,
+    repeat: 'none',
+    priority: 'normal',
+    category: 'personal',
+    status: 'pending',
+    clientPopped: 0,
+    createdAt: new Date().toISOString()
+  };
+  addLocalReminder(localRem);
+  showToast(`✓ Scheduled for ${timeFormatted}`);
+  inputEl.value = '';
+  switchNav('list');
+
+  if ('Notification' in window && Notification.permission === 'default') {
+    setTimeout(() => enablePushNotifications(), 400);
+  }
+
+  // 2. Sync to cloud server in background if online & authenticated
+  if (authToken) {
+    fetch('/api/reminders/quick', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
       body: JSON.stringify({ message, reminderTimestamp, reminderTime })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.reminder) {
+        addLocalReminder(data.reminder);
+      }
+    })
+    .catch(err => {
+      console.warn('[Sync] Offline or sleeping server, saved in local store:', err);
     });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast(data.error || 'Failed to save');
-      return;
-    }
-
-    const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-    showToast(`✓ Scheduled for ${timeFormatted}`);
-    inputEl.value = '';
-    if (data.reminder) {
-      currentReminders = currentReminders.filter(r => r.id !== data.reminder.id);
-      currentReminders.unshift(data.reminder);
-      renderReminders();
-    }
-    await loadReminders();
-    switchNav('list');
-    if ('Notification' in window && Notification.permission === 'default') {
-      setTimeout(() => enablePushNotifications(), 400);
-    }
-  } catch (err) {
-    showToast('Error: ' + err.message);
   }
 }
 
@@ -878,37 +951,51 @@ document.getElementById('form-custom').addEventListener('submit', async (e) => {
   const targetDate = new Date(datetimeVal);
   const reminderTimestamp = targetDate.getTime();
   const reminderTime = targetDate.toISOString();
+  const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-  try {
-    const res = await fetch('/api/reminders/custom', {
+  // 1. Immediately save locally & schedule precision alarm
+  const localRem = {
+    id: 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+    userId: currentUser ? currentUser.id : 'guest',
+    title,
+    message: note || title,
+    reminderTime,
+    reminderTimestamp,
+    repeat: 'none',
+    priority: priority || 'normal',
+    category: 'personal',
+    status: 'pending',
+    clientPopped: 0,
+    createdAt: new Date().toISOString()
+  };
+  addLocalReminder(localRem);
+  showToast(`✓ Saved for ${timeFormatted}`);
+  document.getElementById('form-custom').reset();
+  switchNav('list');
+
+  if ('Notification' in window && Notification.permission === 'default') {
+    setTimeout(() => enablePushNotifications(), 400);
+  }
+
+  // 2. Sync to cloud server
+  if (authToken) {
+    fetch('/api/reminders/custom', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
       body: JSON.stringify({ title, note, reminderTimestamp, reminderTime, priority })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.reminder) {
+        addLocalReminder(data.reminder);
+      }
+    })
+    .catch(err => {
+      console.warn('[Sync] Custom reminder saved in local store:', err);
     });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast(data.error || 'Failed to save');
-      return;
-    }
-
-    const timeFormatted = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-    showToast(`✓ Saved for ${timeFormatted}`);
-    document.getElementById('form-custom').reset();
-    if (data.reminder) {
-      currentReminders = currentReminders.filter(r => r.id !== data.reminder.id);
-      currentReminders.unshift(data.reminder);
-      renderReminders();
-    }
-    await loadReminders();
-    switchNav('list');
-    if ('Notification' in window && Notification.permission === 'default') {
-      setTimeout(() => enablePushNotifications(), 400);
-    }
-  } catch (err) {
-    showToast('Error: ' + err.message);
   }
 });
 
@@ -929,35 +1016,51 @@ document.getElementById('form-daily').addEventListener('submit', async (e) => {
   const reminderTimestamp = targetDate.getTime();
   const reminderTime = targetDate.toISOString();
 
-  try {
-    const res = await fetch('/api/reminders/daily', {
+  // 1. Immediately save locally & schedule precision alarm
+  const localRem = {
+    id: 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+    userId: currentUser ? currentUser.id : 'guest',
+    title,
+    message: title,
+    reminderTime,
+    reminderTimestamp,
+    repeat: 'daily',
+    repeatTime: time,
+    endDate: kisDateTak || null,
+    priority: 'normal',
+    category: 'personal',
+    status: 'pending',
+    clientPopped: 0,
+    createdAt: new Date().toISOString()
+  };
+  addLocalReminder(localRem);
+  showToast(`✓ Daily reminder scheduled at ${time}`);
+  document.getElementById('form-daily').reset();
+  switchNav('list');
+
+  if ('Notification' in window && Notification.permission === 'default') {
+    setTimeout(() => enablePushNotifications(), 400);
+  }
+
+  // 2. Sync to cloud server
+  if (authToken) {
+    fetch('/api/reminders/daily', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
       body: JSON.stringify({ title, time, kisDateTak, reminderTimestamp, reminderTime })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.reminder) {
+        addLocalReminder(data.reminder);
+      }
+    })
+    .catch(err => {
+      console.warn('[Sync] Daily reminder saved in local store:', err);
     });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast(data.error || 'Failed to save');
-      return;
-    }
-
-    showToast(`✓ Daily reminder scheduled at ${time}`);
-    document.getElementById('form-daily').reset();
-    if (data.reminder) {
-      currentReminders = currentReminders.filter(r => r.id !== data.reminder.id);
-      currentReminders.unshift(data.reminder);
-      renderReminders();
-    }
-    await loadReminders();
-    switchNav('list');
-    if ('Notification' in window && Notification.permission === 'default') {
-      setTimeout(() => enablePushNotifications(), 400);
-    }
-  } catch (err) {
-    showToast('Error: ' + err.message);
   }
 });
 
@@ -973,40 +1076,51 @@ document.getElementById('form-contact').addEventListener('submit', async (e) => 
   const reminderTimestamp = targetDate.getTime();
   const reminderTime = targetDate.toISOString();
 
-  try {
-    const res = await fetch('/api/reminders/contact', {
+  // 1. Save locally immediately
+  const localRem = {
+    id: 'rem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+    userId: currentUser ? currentUser.id : 'guest',
+    title: `${title} (for ${contactName})`,
+    message: title,
+    reminderTime,
+    reminderTimestamp,
+    repeat: 'none',
+    priority: 'normal',
+    category: 'contact',
+    targetContactPhone: phone,
+    targetContactName: contactName,
+    status: 'pending',
+    clientPopped: 0,
+    createdAt: new Date().toISOString()
+  };
+  addLocalReminder(localRem);
+  showToast(`✓ Reminder scheduled for ${contactName}!`);
+  document.getElementById('form-contact').reset();
+  switchNav('list');
+
+  if ('Notification' in window && Notification.permission === 'default') {
+    setTimeout(() => enablePushNotifications(), 400);
+  }
+
+  // 2. Sync to cloud server
+  if (authToken) {
+    fetch('/api/reminders/contact', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
       body: JSON.stringify({ contactName, phone, title, reminderTimestamp, reminderTime })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.reminder) {
+        addLocalReminder(data.reminder);
+      }
+    })
+    .catch(err => {
+      console.warn('[Sync] Contact reminder saved in local store:', err);
     });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast(data.error || 'Failed to save');
-      return;
-    }
-
-    if (data.targetUserNotified) {
-      showToast(`✓ Delivered directly to ${contactName}'s app account!`, 3000);
-    } else {
-      showToast(`✓ Reminder scheduled for ${contactName}!`, 3000);
-    }
-
-    document.getElementById('form-contact').reset();
-    if (data.reminder) {
-      currentReminders = currentReminders.filter(r => r.id !== data.reminder.id);
-      currentReminders.unshift(data.reminder);
-      renderReminders();
-    }
-    await loadReminders();
-    switchNav('list');
-    if ('Notification' in window && Notification.permission === 'default') {
-      setTimeout(() => enablePushNotifications(), 400);
-    }
-  } catch (err) {
-    showToast('Error: ' + err.message);
   }
 });
 
@@ -1064,16 +1178,34 @@ function switchListSubtab(subtab) {
 }
 
 async function loadReminders() {
+  // 1. Immediately load local reminders (Zero delay offline support)
+  const localList = getLocalReminders();
+  if (localList.length > 0) {
+    currentReminders = localList;
+    scheduleReminderTimers(currentReminders);
+    renderReminders();
+  }
+
+  // 2. Fetch server reminders if authenticated
   if (!authToken) return;
   try {
     const res = await fetch('/api/reminders', {
       headers: { Authorization: `Bearer ${authToken}` }
     });
-    currentReminders = await res.json();
-    scheduleReminderTimers(currentReminders);
-    renderReminders();
+    if (res.ok) {
+      const serverReminders = await res.json();
+      if (Array.isArray(serverReminders)) {
+        const map = new Map();
+        localList.forEach(r => map.set(r.id, r));
+        serverReminders.forEach(r => map.set(r.id, r));
+        currentReminders = Array.from(map.values());
+        saveLocalReminders(currentReminders);
+        scheduleReminderTimers(currentReminders);
+        renderReminders();
+      }
+    }
   } catch (err) {
-    console.error('Error fetching reminders:', err);
+    console.warn('Server fetch fallback to local reminders:', err);
   }
 }
 
@@ -1263,46 +1395,65 @@ function testPlayReminder(id) {
 
 async function deleteReminder(id) {
   if (!confirm('Delete this reminder?')) return;
-  try {
-    const res = await fetch(`/api/reminders/${id}`, {
+  // Remove locally immediately
+  const localList = getLocalReminders().filter(r => r.id !== id);
+  saveLocalReminders(localList);
+  currentReminders = currentReminders.filter(r => r.id !== id);
+  if (activeTimers.has(id)) {
+    clearTimeout(activeTimers.get(id));
+    activeTimers.delete(id);
+  }
+  handledReminderIds.delete(id);
+  renderReminders();
+  showToast('✓ Reminder deleted');
+
+  if (authToken) {
+    fetch(`/api/reminders/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` }
-    });
-    if (res.ok) {
-      showToast('✓ Reminder deleted');
-      loadReminders();
-    }
-  } catch (e) {
-    showToast('Error deleting reminder');
+    }).catch(() => {});
   }
 }
 
 async function snoozeReminder(id, minutes = 10) {
-  try {
-    const res = await fetch(`/api/reminders/${id}/snooze`, {
+  const rem = currentReminders.find(r => r.id === id);
+  const newDueMs = Date.now() + minutes * 60000;
+  if (rem) {
+    rem.reminderTimestamp = newDueMs;
+    rem.reminderTime = new Date(newDueMs).toISOString();
+    rem.clientPopped = 0;
+    rem.status = 'pending';
+    handledReminderIds.delete(id);
+    addLocalReminder(rem);
+    showToast(`✓ Snoozed for ${minutes} mins`);
+  }
+  if (authToken) {
+    fetch(`/api/reminders/${id}/snooze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`
       },
       body: JSON.stringify({ minutes })
-    });
-    if (res.ok) {
-      showToast(`✓ Snoozed for ${minutes} mins`);
-      loadReminders();
-    }
-  } catch (e) {
-    showToast('Failed to snooze');
+    }).catch(() => {});
   }
 }
 
 async function dismissReminderDirect(id) {
-  try {
-    const res = await fetch(`/api/reminders/${id}/dismiss`, {
+  const rem = currentReminders.find(r => r.id === id);
+  if (rem) {
+    rem.status = 'completed';
+    rem.clientPopped = 1;
+    addLocalReminder(rem);
+    showToast('✓ Completed');
+  }
+  if (authToken) {
+    fetch(`/api/reminders/${id}/dismiss`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${authToken}` }
-    });
-    if (res.ok) {
+    }).catch(() => {});
+  }
+}
       showToast('✓ Completed');
       loadReminders();
     }

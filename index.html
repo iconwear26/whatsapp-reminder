@@ -6,24 +6,24 @@
   <meta name="theme-color" content="#0F5132">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ReminderMe">
-  <meta name="description" content="ReminderMe is the smart daily productivity app for automated morning routines, evening wrap-ups, voice-to-text task scheduling, and soothing sweet chime alerts.">
-  <meta name="keywords" content="ReminderMe, Reminder Me, ReminderMe App, reminderme-app, reminderme-app.vercel.app, daily reminder app, morning reminder, evening reminder, voice reminders, task manager, free productivity app">
-  <meta name="author" content="ReminderMe">
-  <title>ReminderMe - Smart Daily Morning & Evening Reminder App</title>
+  <meta name="apple-mobile-web-app-title" content="Reminder Me">
+  <meta name="description" content="Reminder Me is the smart daily productivity app for automated morning routines, evening wrap-ups, voice-to-text task scheduling, and soothing sweet chime alerts.">
+  <meta name="keywords" content="Reminder Me, ReminderMe, ReminderMe App, reminderme-app, reminderme-app.vercel.app, daily reminder app, morning reminder, evening reminder, voice reminders, task manager, free productivity app">
+  <meta name="author" content="Reminder Me">
+  <title>Reminder Me - Smart Daily Morning & Evening Reminder App</title>
 
   <!-- Canonical & OpenGraph Meta Tags -->
   <link rel="canonical" href="https://reminderme-app.vercel.app">
-  <meta property="og:title" content="ReminderMe - Smart Daily Morning & Evening Reminder App">
+  <meta property="og:title" content="Reminder Me - Smart Daily Morning & Evening Reminder App">
   <meta property="og:description" content="Stay organized effortlessly with morning & evening automated reminders, voice-to-text task entry, sweet chime tones, and lock-screen alerts.">
   <meta property="og:url" content="https://reminderme-app.vercel.app">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="ReminderMe">
+  <meta property="og:site_name" content="Reminder Me">
   <meta property="og:image" content="https://reminderme-app.vercel.app/icons/icon-512.png">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ReminderMe - Smart Daily Morning & Evening Reminder App">
+  <meta name="twitter:title" content="Reminder Me - Smart Daily Morning & Evening Reminder App">
   <meta name="twitter:description" content="Stay organized effortlessly with morning & evening automated reminders, voice-to-text task entry, sweet chime tones, and lock-screen alerts.">
   <meta name="twitter:image" content="https://reminderme-app.vercel.app/icons/icon-512.png">
 
@@ -41,8 +41,8 @@
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    "name": "ReminderMe",
-    "alternateName": "Reminder Me",
+    "name": "Reminder Me",
+    "alternateName": "ReminderMe",
     "url": "https://reminderme-app.vercel.app",
     "description": "Smart daily morning & evening routine reminder app with voice-to-text task scheduling and soothing sweet chime alarms.",
     "applicationCategory": "ProductivityApplication",
@@ -107,7 +107,7 @@
 
         <div class="header-controls">
           <!-- Prominent Glowing Download App Button in Header -->
-          <button id="btn-header-install" class="btn-header-download pulse-glowing-btn" onclick="triggerPwaInstall()" title="Download ReminderMe App">
+          <button id="btn-header-install" class="btn-header-download pulse-glowing-btn" onclick="triggerPwaInstall()" title="Download Reminder Me App">
             <span class="btn-icon">📲</span>
             <span class="btn-text">Download App</span>
           </button>
@@ -120,7 +120,7 @@
             <span id="lang-label">हिन्दी</span>
           </button>
           <!-- Share App Button -->
-          <button id="share-app-btn" class="header-icon-btn" title="Share ReminderMe App">
+          <button id="share-app-btn" class="header-icon-btn" title="Share Reminder Me App">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="18" cy="5" r="3"></circle>
               <circle cx="6" cy="12" r="3"></circle>
@@ -143,7 +143,7 @@
       </div>
 
       <h2 class="hero-title">
-        Never Miss a Moment with <span class="hero-title-accent">ReminderMe</span>
+        Never Miss a Moment with <span class="hero-title-accent">Reminder Me</span>
       </h2>
 
       <p class="hero-subtitle">
@@ -155,7 +155,7 @@
         <button type="button" class="btn-download-pwa pulse-glowing-btn" onclick="triggerPwaInstall()">
           <span class="cta-icon">📲</span>
           <div class="cta-text-wrap">
-            <span class="cta-title">Download ReminderMe App</span>
+            <span class="cta-title">Download Reminder Me App</span>
             <span class="cta-sub">1-Click Install • Free & Fast • Offline Ready</span>
           </div>
         </button>
@@ -186,7 +186,7 @@
           <div class="feat-icon-bubble">🎙️</div>
           <div class="feat-content">
             <h3 class="feat-title">Voice-to-Text Task Entry</h3>
-            <p class="feat-desc">Speak naturally into your microphone — ReminderMe automatically transcribes, schedules, and saves tasks in 1 second.</p>
+            <p class="feat-desc">Speak naturally into your microphone — Reminder Me automatically transcribes, schedules, and saves tasks in 1 second.</p>
           </div>
         </div>
 
@@ -291,6 +291,13 @@
 
             <button type="submit" class="btn-pill btn-forest mt-3" id="auth-submit-btn">
               Start 10-Day Free Trial
+            </button>
+
+            <div style="text-align:center; margin-top:14px; margin-bottom:10px;">
+              <span style="font-size:12px; color:var(--text-tertiary); font-weight:600;">— OR QUICK USE —</span>
+            </div>
+            <button type="button" class="btn-pill btn-secondary" onclick="continueAsGuest()" id="btn-guest-mode" style="width:100%; border-style:dashed; font-weight:700;">
+              ⚡ Quick Start as Guest (Save Reminders Instantly)
             </button>
           </form>
 
@@ -639,7 +646,7 @@
           <!-- Share App Button -->
           <div class="form-group mt-3">
             <button type="button" class="btn-pill btn-secondary" onclick="shareReminderMeApp()">
-              Share ReminderMe App
+              Share Reminder Me App
             </button>
           </div>
 
@@ -869,7 +876,7 @@
         </div>
 
         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 14px;">
-          ReminderMe is a Progressive Web App (PWA). Follow these simple steps to install it on your device:
+          Reminder Me is a Progressive Web App (PWA). Follow these simple steps to install it on your device:
         </p>
 
         <!-- Device Guide: iOS -->
@@ -881,7 +888,7 @@
           <ol style="font-size: 12px; color: var(--text-secondary); padding-left: 20px; line-height: 1.5; margin: 0;">
             <li>Tap the <strong>Share</strong> button (box with upward arrow) in Safari.</li>
             <li>Scroll down and tap <strong>"Add to Home Screen"</strong> ➕.</li>
-            <li>Tap <strong>"Add"</strong> in the top right corner. ReminderMe will install on your home screen!</li>
+            <li>Tap <strong>"Add"</strong> in the top right corner. Reminder Me will install on your home screen!</li>
           </ol>
         </div>
 
@@ -910,7 +917,7 @@
             <strong style="font-size: 13px; color: var(--text-primary);">Windows / Mac / Desktop</strong>
           </div>
           <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin: 0;">
-            Click the <strong>Install icon (⊕)</strong> on the right side of the browser address bar in Chrome or Edge, or select <strong>Menu &rarr; "Install ReminderMe"</strong>.
+            Click the <strong>Install icon (⊕)</strong> on the right side of the browser address bar in Chrome or Edge, or select <strong>Menu &rarr; "Install Reminder Me"</strong>.
           </p>
         </div>
 
@@ -921,6 +928,9 @@
     </div>
 
   </div>
+
+  <!-- Preloaded Sweet Notification Chime Audio -->
+  <audio id="notif-chime-audio" src="/sounds/sweet_chime.wav" preload="auto"></audio>
 
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script src="/app.js"></script>
