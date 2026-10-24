@@ -1087,6 +1087,34 @@ body {
   transform: scale(0.97);
 }
 
+.install-quick-strip {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.14));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--radius-card);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.install-quick-strip:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(5, 150, 105, 0.18));
+  transform: translateY(-1px);
+}
+
+@media (max-width: 480px) {
+  .download-btn-text {
+    display: none;
+  }
+  .btn-header-download {
+    padding: 6px 10px;
+    font-size: 14px;
+  }
+}
+
 .landing-hero-card {
   background: linear-gradient(180deg, #FFFFFF 0%, #F8FAF9 100%);
   border: 1px solid var(--border-subtle);

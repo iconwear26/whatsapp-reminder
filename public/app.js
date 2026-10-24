@@ -72,14 +72,18 @@ function applyAppDisplayMode() {
   const isStandalone = checkIsStandalone();
   const landingHero = document.getElementById('landing-hero');
   const headerInstallBtn = document.getElementById('btn-header-install');
+  const quickStrip = document.getElementById('install-quick-strip');
 
   if (isStandalone) {
     document.body.classList.add('is-standalone-app');
     if (landingHero) landingHero.style.display = 'none';
     if (headerInstallBtn) headerInstallBtn.style.display = 'none';
+    if (quickStrip) quickStrip.style.display = 'none';
     console.log('[PWA] Standalone App Mode Active -> Direct to Dashboard');
   } else {
     document.body.classList.remove('is-standalone-app');
+    if (headerInstallBtn) headerInstallBtn.style.display = 'inline-flex';
+    if (quickStrip) quickStrip.style.display = 'flex';
     const skipped = sessionStorage.getItem('reminderme_skip_landing');
     if (skipped === '1' && landingHero) {
       landingHero.style.display = 'none';
