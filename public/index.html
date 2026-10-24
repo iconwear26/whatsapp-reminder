@@ -106,15 +106,6 @@
         </div>
 
         <div class="header-controls">
-          <!-- Prominent Glowing Download App Button in Header -->
-          <button id="btn-header-install" class="btn-header-download pulse-glowing-btn" onclick="triggerPwaInstall()" title="Download Reminder Me App">
-            <span class="btn-icon">📲</span>
-            <span class="btn-text">Download App</span>
-          </button>
-          <!-- Instant In-App Sync / Update Button -->
-          <button id="btn-header-update" class="header-icon-btn" title="Sync Cloud Update" onclick="triggerLiveAppUpdate()" style="color:var(--emerald-primary); background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); font-size:11px; font-weight:700; padding:6px 10px; border-radius:20px; display:inline-flex; align-items:center; gap:4px;">
-            <span style="font-size:13px;">🔄</span> Update
-          </button>
           <!-- Dynamic Language Switcher (English default / Hindi) -->
           <button id="lang-toggle-btn" class="lang-switch-btn" title="Switch Language">
             <span id="lang-label">हिन्दी</span>
@@ -598,20 +589,20 @@
             </div>
           </div>
 
-          <!-- Instant In-App Live Update Card (No APK re-download needed) -->
-          <div class="card-glass mt-3 p-3" style="background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(5,150,105,0.14)); border: 1px solid rgba(16,185,129,0.3); border-radius: 18px;">
+          <!-- Instant In-App Live Update Card (Owner / Admin Only) -->
+          <div id="owner-update-card" class="card-glass mt-3 p-3 hidden" style="background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(5,150,105,0.14)); border: 1px solid rgba(16,185,129,0.3); border-radius: 18px;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
               <div style="display:flex; align-items:center; gap:8px;">
                 <span style="font-size:22px;">⚡</span>
                 <div>
-                  <div style="font-weight:700; font-size:14px; color:var(--text-primary);">App Updates & Cloud Sync</div>
+                  <div style="font-weight:700; font-size:14px; color:var(--text-primary);">App Updates & Cloud Sync (Admin)</div>
                   <div style="font-size:11px; color:var(--text-secondary);" id="lbl-app-version">Version 3.1.0 • Up to Date 🌸</div>
                 </div>
               </div>
               <span id="badge-update-status" class="pill-tag" style="background:#10B981; color:#fff; font-size:10px;">Latest</span>
             </div>
             <p style="font-size:11px; color:var(--text-secondary); margin-bottom:12px; line-height:1.4;">
-              Naye features aur security improvements bina APK re-download kiye yahan se instant sync hote hain. Aapka data aur login session bilkul safe rahega.
+              Naye features aur security improvements bina APK re-download kiye yahan se instant sync hote hain.
             </p>
             <button id="btn-update-action" type="button" class="btn-pill btn-forest" style="padding:10px 18px; font-size:13px; font-weight:700; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="triggerLiveAppUpdate()">
               <span id="spinner-update" class="hidden">⏳</span>

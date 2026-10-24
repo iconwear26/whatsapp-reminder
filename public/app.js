@@ -453,14 +453,18 @@ function showToast(msg, duration = 3000) {
 }
 
 // Sweet Audio Chime (plays sweet_chime.wav or harmonious synth chime)
+let lastChimePlayTime = 0;
 function playNotificationChime() {
+  const now = Date.now();
+  if (now - lastChimePlayTime < 4000) return; // Prevent duplicate rapid chime spam
+  lastChimePlayTime = now;
+
   try {
     const preloadedAudio = document.getElementById('notif-chime-audio');
     if (preloadedAudio) {
       preloadedAudio.currentTime = 0;
       preloadedAudio.play().catch(() => {
-        const audio = new Audio('/sounds/sweet_chime.wav');
-        audio.play().catch(() => playSynthChime());
+        playSynthChime();
       });
       return;
     }
@@ -678,6 +682,8 @@ function scheduleReminderTimers(reminders) {
 
 async function pollDueReminders() {
   if (!authToken || !currentUser) return;
+  if (typeof document !== 'undefined' && document.hidden) return;
+
   try {
     const res = await fetch('/api/reminders/due-notifications', {
       headers: { Authorization: `Bearer ${authToken}` }
@@ -685,18 +691,22 @@ async function pollDueReminders() {
     if (!res.ok) return;
     const data = await res.json();
     if (data.due && data.due.length > 0) {
+      let triggeredAny = false;
       for (const rem of data.due) {
         if (!handledReminderIds.has(rem.id)) {
           handledReminderIds.add(rem.id);
           showIosNotificationBanner(rem);
-          loadReminders();
+          triggeredAny = true;
           break;
         }
+      }
+      if (triggeredAny) {
+        loadReminders();
       }
     }
   } catch (e) {}
 }
-setInterval(pollDueReminders, 4000);
+setInterval(pollDueReminders, 25000);
 
 // -------------------------------------------------------------
 // LANGUAGE LOCALIZATION SYSTEM
@@ -835,6 +845,7 @@ function addLocalReminder(rem) {
 }
 
 function continueAsGuest() {
+  localStorage.setItem('reminder_me_guest_mode', 'true');
   if (!currentUser) {
     currentUser = {
       id: 'guest_' + Date.now(),
@@ -845,6 +856,7 @@ function continueAsGuest() {
     };
     saveSafeUserSession(currentUser);
   }
+  initAppSession();
   switchNav('create');
   showToast('✓ Quick Start active — reminders will save on your phone!');
   loadReminders();
@@ -1454,13 +1466,6 @@ async function dismissReminderDirect(id) {
     }).catch(() => {});
   }
 }
-      showToast('✓ Completed');
-      loadReminders();
-    }
-  } catch (e) {
-    showToast('Failed to complete');
-  }
-}
 
 // -------------------------------------------------------------
 // AUTHENTICATION & SESSION ("NEVER LOGOUT")
@@ -1533,7 +1538,23 @@ document.getElementById('auth-form').addEventListener('submit', async (e) => {
 });
 
 async function checkSession() {
+  const isGuestMode = localStorage.getItem('reminder_me_guest_mode') === 'true';
   if (!authToken) {
+    if (isGuestMode) {
+      if (!currentUser) {
+        currentUser = {
+          id: 'guest_' + Date.now(),
+          fullName: 'Guest User',
+          planStatus: 'trial',
+          isGuest: true,
+          trialDaysRemaining: 10
+        };
+      }
+      initAppSession();
+      switchNav('create');
+      loadReminders();
+      return;
+    }
     switchNav('auth');
     return;
   }
@@ -1598,10 +1619,20 @@ function initAppSession() {
 
   updateUserBadge();
 
-  // Automatically hide marketing landing hero when user is logged into the app
+  // Automatically hide marketing landing hero when user is inside the app
   const landingHero = document.getElementById('landing-hero');
   if (landingHero) {
     landingHero.style.display = 'none';
+  }
+
+  // Show in-app update card inside Settings ONLY for owner, hide for everyone else
+  const ownerUpdateCard = document.getElementById('owner-update-card');
+  if (ownerUpdateCard) {
+    if (isOwner) {
+      ownerUpdateCard.classList.remove('hidden');
+    } else {
+      ownerUpdateCard.classList.add('hidden');
+    }
   }
 
   if (isOwner) {
