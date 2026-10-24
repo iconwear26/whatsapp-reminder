@@ -13,7 +13,19 @@
     },
     {
       "src": "/download/apk",
-      "dest": "https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk"
+      "headers": {
+        "Content-Disposition": "attachment; filename=\"ReminderMe.apk\"",
+        "Content-Type": "application/vnd.android.package-archive"
+      },
+      "dest": "/ReminderMe.apk"
+    },
+    {
+      "src": "/ReminderMe.apk",
+      "headers": {
+        "Content-Disposition": "attachment; filename=\"ReminderMe.apk\"",
+        "Content-Type": "application/vnd.android.package-archive"
+      },
+      "dest": "/ReminderMe.apk"
     },
     {
       "src": "/",

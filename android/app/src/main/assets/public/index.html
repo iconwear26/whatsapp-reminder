@@ -106,11 +106,11 @@
         </div>
 
         <div class="header-controls">
-          <!-- Prominent Download App Button -->
-          <button id="btn-header-install" class="btn-header-download" onclick="triggerPwaInstall()" title="Download Reminder Me App">
-            <span class="btn-icon">📲</span>
+          <!-- Direct 1-Click APK Download Button in Header -->
+          <a href="/ReminderMe.apk" download="ReminderMe.apk" id="btn-header-download" class="btn-direct-download" title="Download Reminder Me App" onclick="showToast('📥 Downloading Reminder Me APK...')">
+            <span class="btn-icon">📥</span>
             <span class="download-btn-text">Download App</span>
-          </button>
+          </a>
           <!-- Dynamic Language Switcher (English default / Hindi) -->
           <button id="lang-toggle-btn" class="lang-switch-btn" title="Switch Language">
             <span id="lang-label">हिन्दी</span>
@@ -129,111 +129,7 @@
       </div>
     </header>
 
-    <!-- ============================================== -->
-    <!-- LANDING PAGE & PWA HERO BANNER (WEBSITE VIEW) -->
-    <!-- ============================================== -->
-    <section id="landing-hero" class="landing-hero-card">
-      <div class="hero-badge-pill">
-        <span class="badge-sparkle">✨</span>
-        <span>Official App • reminderme-app.vercel.app</span>
-      </div>
-
-      <h2 class="hero-title">
-        Never Miss a Moment with <span class="hero-title-accent">Reminder Me</span>
-      </h2>
-
-      <p class="hero-subtitle">
-        Your smart daily companion for automated morning routines, peaceful evening reminders, voice-to-text task scheduling, and calming sweet chime notifications right on your phone & desktop.
-      </p>
-
-      <!-- Primary Action CTA Banner -->
-      <div class="hero-cta-group">
-        <button type="button" class="btn-download-pwa pulse-glowing-btn" onclick="triggerPwaInstall()">
-          <span class="cta-icon">📲</span>
-          <div class="cta-text-wrap">
-            <span class="cta-title">Download Reminder Me App</span>
-            <span class="cta-sub">1-Click Install • Free & Fast • Offline Ready</span>
-          </div>
-        </button>
-
-        <div class="hero-secondary-actions">
-          <button type="button" class="btn-ghost-action" onclick="scrollToAppView()">
-            <span>🚀 Open Web Dashboard</span>
-          </button>
-          <button type="button" class="btn-ghost-action" onclick="openPwaInstallModal()">
-            <span>ℹ️ Install Guide</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Core Features Grid (4 Feature Cards) -->
-      <div class="hero-features-grid">
-        <!-- Feature 1 -->
-        <div class="hero-feat-card">
-          <div class="feat-icon-bubble">🌅</div>
-          <div class="feat-content">
-            <h3 class="feat-title">Morning & Evening Reminders</h3>
-            <p class="feat-desc">Kickstart every morning with your priorities and wrap up your evenings with calm, automated routine checklists.</p>
-          </div>
-        </div>
-
-        <!-- Feature 2 -->
-        <div class="hero-feat-card">
-          <div class="feat-icon-bubble">🎙️</div>
-          <div class="feat-content">
-            <h3 class="feat-title">Voice-to-Text Task Entry</h3>
-            <p class="feat-desc">Speak naturally into your microphone — Reminder Me automatically transcribes, schedules, and saves tasks in 1 second.</p>
-          </div>
-        </div>
-
-        <!-- Feature 3 -->
-        <div class="hero-feat-card">
-          <div class="feat-icon-bubble">🔔</div>
-          <div class="feat-content">
-            <h3 class="feat-title">Smart Lock-Screen Alerts</h3>
-            <p class="feat-desc">Rings on time with soothing sweet chime bells and clear status-bar icons that keep you peacefully notified.</p>
-          </div>
-        </div>
-
-        <!-- Feature 4 -->
-        <div class="hero-feat-card">
-          <div class="feat-icon-bubble">🌿</div>
-          <div class="feat-content">
-            <h3 class="feat-title">Free Daily Productivity</h3>
-            <p class="feat-desc">Clean, distraction-free aesthetic with pre-built categories (Daily, Health, Work, Custom) and instant cloud sync.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Trust Badges & Web Switcher -->
-      <div class="hero-footer-bar">
-        <div class="platform-chips">
-          <span class="chip-item">📱 Android PWA</span>
-          <span class="chip-item">🍏 iOS Safari</span>
-          <span class="chip-item">💻 Chrome / Edge</span>
-          <span class="chip-item">🔒 100% Secure</span>
-        </div>
-        <button type="button" class="btn-text-link" onclick="continueToWebApp()">
-          Continue using in Web Browser &rarr;
-        </button>
-      </div>
-    </section>
-
-    <!-- Lock-Screen Notification Notice Bar -->
-    <div id="lockscreen-perm-banner" class="lockscreen-notice-card hidden">
-      <div class="lockscreen-notice-content">
-        <div class="lockscreen-notice-icon">🔔</div>
-        <div>
-          <div class="lockscreen-notice-title" id="lbl-lockscreen-title">Ring Reminders on Time</div>
-          <div class="lockscreen-notice-sub" id="lbl-lockscreen-sub">Allow notifications so reminders ring on your phone.</div>
-        </div>
-      </div>
-      <div class="lockscreen-notice-actions">
-        <button type="button" class="btn-notice-pill btn-notice-primary" id="btn-banner-enable" onclick="enablePushNotifications()">Allow 🔔</button>
-      </div>
-    </div>
-
-    <!-- Main Content Area -->
+    <!-- Main Content Area (Clean, Distraction-Free App Dashboard) -->
     <main class="app-main">
 
       <!-- ============================================== -->
@@ -308,21 +204,21 @@
       <!-- ============================================== -->
       <section id="view-create" class="view active">
         
-        <!-- App Download / Install Quick Bar -->
-        <div id="install-quick-strip" class="install-quick-strip" onclick="openPwaInstallModal()">
+        <!-- App Direct APK Download Banner -->
+        <a href="/ReminderMe.apk" download="ReminderMe.apk" id="install-quick-strip" class="install-quick-strip" style="text-decoration:none; color:inherit;" onclick="showToast('📥 Downloading Reminder Me APK...')">
           <div style="display:flex; align-items:center; gap:10px;">
-            <div style="width:34px; height:34px; border-radius:10px; background:#0F5132; color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <div style="width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg, #0F5132, #10B981); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px; box-shadow:0 4px 10px rgba(16,185,129,0.3); flex-shrink:0;">
               📲
             </div>
             <div style="text-align:left;">
-              <div style="font-size:13px; font-weight:700; color:var(--text-primary);">Install Reminder Me App</div>
-              <div style="font-size:11px; color:var(--text-secondary);">Direct 1-tap install on your phone home screen</div>
+              <div style="font-size:13px; font-weight:700; color:var(--text-primary);">Download Official Android App</div>
+              <div style="font-size:11px; color:var(--text-secondary);">Direct APK (9.8 MB) • Tap to Download Instantly</div>
             </div>
           </div>
-          <button type="button" class="btn-pill btn-forest" style="padding:6px 14px; font-size:12px; font-weight:700;" onclick="event.stopPropagation(); triggerPwaInstall();">
-            Install 📥
-          </button>
-        </div>
+          <span class="btn-pill btn-forest" style="padding:7px 14px; font-size:12px; font-weight:700; white-space:nowrap; display:inline-flex; align-items:center; gap:4px;">
+            Download 📥
+          </span>
+        </a>
 
         <!-- Segmented Mode Bar -->
         <div class="mode-segmented-bar">

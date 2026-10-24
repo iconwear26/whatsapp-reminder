@@ -71,7 +71,7 @@ function checkIsStandalone() {
 function applyAppDisplayMode() {
   const isStandalone = checkIsStandalone();
   const landingHero = document.getElementById('landing-hero');
-  const headerInstallBtn = document.getElementById('btn-header-install');
+  const headerInstallBtn = document.getElementById('btn-header-install') || document.getElementById('btn-header-download');
   const quickStrip = document.getElementById('install-quick-strip');
 
   if (isStandalone) {
