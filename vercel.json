@@ -17,7 +17,7 @@
         "Content-Disposition": "attachment; filename=\"ReminderMe.apk\"",
         "Content-Type": "application/vnd.android.package-archive"
       },
-      "dest": "/ReminderMe.apk"
+      "dest": "/public/ReminderMe.apk"
     },
     {
       "src": "/ReminderMe.apk",
@@ -25,7 +25,7 @@
         "Content-Disposition": "attachment; filename=\"ReminderMe.apk\"",
         "Content-Type": "application/vnd.android.package-archive"
       },
-      "dest": "/ReminderMe.apk"
+      "dest": "/public/ReminderMe.apk"
     },
     {
       "src": "/",
