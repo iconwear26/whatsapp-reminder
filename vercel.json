@@ -13,19 +13,10 @@
     },
     {
       "src": "/download/apk",
+      "status": 302,
       "headers": {
-        "Content-Disposition": "attachment; filename=\"ReminderMe.apk\"",
-        "Content-Type": "application/vnd.android.package-archive"
-      },
-      "dest": "/public/ReminderMe.apk"
-    },
-    {
-      "src": "/ReminderMe.apk",
-      "headers": {
-        "Content-Disposition": "attachment; filename=\"ReminderMe.apk\"",
-        "Content-Type": "application/vnd.android.package-archive"
-      },
-      "dest": "/public/ReminderMe.apk"
+        "Location": "/ReminderMe.apk"
+      }
     },
     {
       "src": "/",
