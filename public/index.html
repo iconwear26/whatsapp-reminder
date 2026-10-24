@@ -107,7 +107,7 @@
 
         <div class="header-controls">
           <!-- Direct 1-Click APK Download Button in Header -->
-          <a href="/ReminderMe.apk" download="ReminderMe.apk" id="btn-header-download" class="btn-direct-download" title="Download Reminder Me App" onclick="showToast('📥 Downloading Reminder Me APK...')">
+          <a href="/ReminderMe.apk" download="ReminderMe.apk" target="_blank" id="btn-header-download" class="btn-direct-download" title="Download Reminder Me App" onclick="showToast('📥 Downloading Reminder Me APK...')">
             <span class="btn-icon">📥</span>
             <span class="download-btn-text">Download App</span>
           </a>
@@ -205,7 +205,7 @@
       <section id="view-create" class="view active">
         
         <!-- App Direct APK Download Banner -->
-        <a href="/ReminderMe.apk" download="ReminderMe.apk" id="install-quick-strip" class="install-quick-strip" style="text-decoration:none; color:inherit;" onclick="showToast('📥 Downloading Reminder Me APK...')">
+        <a href="/ReminderMe.apk" download="ReminderMe.apk" target="_blank" id="install-quick-strip" class="install-quick-strip" style="text-decoration:none; color:inherit;" onclick="showToast('📥 Downloading Reminder Me APK...')">
           <div style="display:flex; align-items:center; gap:10px;">
             <div style="width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg, #0F5132, #10B981); color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px; box-shadow:0 4px 10px rgba(16,185,129,0.3); flex-shrink:0;">
               📲
@@ -375,9 +375,14 @@
           </button>
         </div>
 
-        <div class="card-title-row">
-          <h2 id="lbl-list-title">Your Reminders</h2>
-          <span id="reminders-count" class="pill-tag">0 Active</span>
+        <div class="card-title-row" style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h2 id="lbl-list-title" style="margin:0;">Your Reminders</h2>
+            <span id="reminders-count" class="pill-tag">0 Active</span>
+          </div>
+          <button type="button" class="mini-btn" id="btn-clear-all" style="background:#FEE2E2; color:#DC2626; border:1px solid #FCA5A5; font-weight:700; padding:6px 12px; border-radius:10px; cursor:pointer; font-size:11px;" onclick="clearAllReminders()" title="Clear all test data">
+            🧹 Clear All
+          </button>
         </div>
 
         <!-- 1. Active Reminders Container -->
@@ -540,9 +545,14 @@
               <button type="button" class="btn-pill btn-forest" style="padding:10px 18px; font-size:13px; font-weight:700;" onclick="triggerPwaInstall()">
                 📲 1-Click Install App (Android / iPhone)
               </button>
-              <a href="/ReminderMe.apk" download="ReminderMe.apk" class="btn-pill btn-secondary" style="padding:9px 18px; font-size:12px; font-weight:700; text-decoration:none; text-align:center; display:block;">
-                🤖 Download Direct Android APK (.apk)
-              </a>
+              <div style="display:flex; gap:8px;">
+                <a href="/ReminderMe.apk" download="ReminderMe.apk" target="_blank" class="btn-pill btn-secondary" style="flex:1; padding:9px 8px; font-size:11px; font-weight:700; text-decoration:none; text-align:center;">
+                  🤖 Direct APK (9.8 MB)
+                </a>
+                <a href="https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk" target="_blank" class="btn-pill btn-secondary" style="flex:1; padding:9px 8px; font-size:11px; font-weight:700; text-decoration:none; text-align:center;">
+                  🌐 Mirror (GitHub)
+                </a>
+              </div>
               <button type="button" class="btn-pill btn-secondary" style="padding:8px 18px; font-size:12px; font-weight:600; border:none; background:transparent;" onclick="openPwaInstallModal()">
                 ℹ️ How to Install on iPhone / Android Guide
               </button>
@@ -587,8 +597,15 @@
             </button>
           </div>
 
+          <!-- Clear All Test Reminders Button -->
+          <div class="form-group mt-3 pt-3" style="border-top:1px solid var(--border-subtle);">
+            <button type="button" class="btn-pill" style="background:#FEE2E2; color:#DC2626; border:1px solid #FCA5A5; font-weight:700; width:100%;" onclick="clearAllReminders()">
+              🧹 Clear All Reminders & Test Data
+            </button>
+          </div>
+
           <!-- Delete Account Button (DPDP Compliance) -->
-          <div class="form-group mt-4 pt-3" style="border-top:1px solid var(--border-subtle);">
+          <div class="form-group mt-3">
             <button type="button" class="btn-pill btn-danger-outline" onclick="deleteUserAccount()">
               Delete My Account & Data
             </button>
@@ -744,9 +761,10 @@
           </p>
           <div class="aesthetic-time-tag" id="aesthetic-time-tag">9:45 PM</div>
         </div>
-        <div class="aesthetic-card-footer" style="display:flex; gap:10px;">
-          <button type="button" class="btn-aesthetic-done" style="flex:1;" onclick="markAestheticDone()">Done ✓</button>
-          <button type="button" class="btn-aesthetic-snooze" style="flex:1; background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; border-radius:var(--radius-pill); font-weight:700; font-size:14px; padding:12px 16px; cursor:pointer;" onclick="snoozeAestheticModal(10)">Snooze 10m ⏰</button>
+        <div class="aesthetic-card-footer" style="display:flex; gap:8px;">
+          <button type="button" class="btn-aesthetic-done" style="flex:2;" onclick="markAestheticDone()">Done ✓</button>
+          <button type="button" class="btn-aesthetic-snooze" style="flex:2; background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; border-radius:var(--radius-pill); font-weight:700; font-size:13px; padding:12px 10px; cursor:pointer;" onclick="snoozeAestheticModal(10)">Snooze ⏰</button>
+          <button type="button" style="flex:1; background:#FEE2E2; color:#DC2626; border:1px solid #FCA5A5; border-radius:var(--radius-pill); font-weight:700; font-size:13px; padding:12px 10px; cursor:pointer;" onclick="deleteActiveViewingReminder()" title="Delete">🗑️</button>
         </div>
       </div>
     </div>
@@ -833,9 +851,12 @@
             <li>Select <strong>"Install App"</strong> or <strong>"Add to Home screen"</strong>.</li>
             <li>Confirm <strong>"Install"</strong>.</li>
           </ol>
-          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.1);">
-            <a href="/ReminderMe.apk" download="ReminderMe.apk" class="btn-pill btn-secondary" style="display: block; text-align: center; font-size: 11px; padding: 6px 12px; text-decoration: none;">
-              📥 Or Download Direct Android APK
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.1); display:flex; gap:6px;">
+            <a href="/ReminderMe.apk" download="ReminderMe.apk" target="_blank" class="btn-pill btn-secondary" style="flex:1; text-align: center; font-size: 11px; padding: 6px 10px; text-decoration: none;">
+              📥 Direct APK (9.8 MB)
+            </a>
+            <a href="https://github.com/iconwear26/whatsapp-reminder/releases/download/v2.0-apk/ReminderMe.apk" target="_blank" class="btn-pill btn-secondary" style="flex:1; text-align: center; font-size: 11px; padding: 6px 10px; text-decoration: none;">
+              🌐 Mirror (GitHub)
             </a>
           </div>
         </div>

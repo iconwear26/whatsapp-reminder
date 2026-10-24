@@ -12,6 +12,15 @@
       "dest": "https://whatsapp-reminder-0yad.onrender.com/api/$1"
     },
     {
+      "src": "/ReminderMe.apk",
+      "headers": {
+        "Content-Disposition": "attachment; filename=\"ReminderMe.apk\"",
+        "Content-Type": "application/vnd.android.package-archive",
+        "Cache-Control": "public, max-age=86400"
+      },
+      "dest": "/public/ReminderMe.apk"
+    },
+    {
       "src": "/download/apk",
       "status": 302,
       "headers": {

@@ -1,5 +1,5 @@
 // Service Worker for Reminder Me App (PWA)
-const CACHE_NAME = 'reminderme-pwa-v15';
+const CACHE_NAME = 'reminderme-pwa-v16';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -44,9 +44,17 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Never intercept API endpoints or external payment gateways
-  if (e.request.url.includes('/api/') || e.request.url.includes('razorpay.com')) {
-    return;
+  const reqUrl = (e.request.url || '').toLowerCase();
+
+  // Never intercept API endpoints, external payment gateways, or large APK file downloads
+  if (
+    reqUrl.includes('/api/') || 
+    reqUrl.includes('razorpay.com') ||
+    reqUrl.endsWith('.apk') ||
+    reqUrl.includes('reminderme.apk') ||
+    reqUrl.includes('/download/')
+  ) {
+    return; // Pass directly to native browser / Android download manager
   }
 
   // Network first with cache fallback for navigation / documents

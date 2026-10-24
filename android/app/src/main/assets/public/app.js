@@ -1193,14 +1193,35 @@ function switchListSubtab(subtab) {
   renderReminders();
 }
 
+function markReminderDeleted(id) {
+  if (!id) return;
+  try {
+    const raw = localStorage.getItem('reminder_me_deleted_ids');
+    const set = raw ? JSON.parse(raw) : [];
+    if (!set.includes(id)) {
+      set.push(id);
+      localStorage.setItem('reminder_me_deleted_ids', JSON.stringify(set.slice(-300)));
+    }
+  } catch (e) {}
+}
+
+function isReminderDeleted(id) {
+  if (!id) return false;
+  try {
+    const raw = localStorage.getItem('reminder_me_deleted_ids');
+    const set = raw ? JSON.parse(raw) : [];
+    return set.includes(id);
+  } catch (e) {
+    return false;
+  }
+}
+
 async function loadReminders() {
   // 1. Immediately load local reminders (Zero delay offline support)
-  const localList = getLocalReminders();
-  if (localList.length > 0) {
-    currentReminders = localList;
-    scheduleReminderTimers(currentReminders);
-    renderReminders();
-  }
+  const localList = getLocalReminders().filter(r => !isReminderDeleted(r.id));
+  currentReminders = localList;
+  scheduleReminderTimers(currentReminders);
+  renderReminders();
 
   // 2. Fetch server reminders if authenticated
   if (!authToken) return;
@@ -1212,8 +1233,12 @@ async function loadReminders() {
       const serverReminders = await res.json();
       if (Array.isArray(serverReminders)) {
         const map = new Map();
-        localList.forEach(r => map.set(r.id, r));
-        serverReminders.forEach(r => map.set(r.id, r));
+        localList.forEach(r => {
+          if (!isReminderDeleted(r.id)) map.set(r.id, r);
+        });
+        serverReminders.forEach(r => {
+          if (!isReminderDeleted(r.id)) map.set(r.id, r);
+        });
         currentReminders = Array.from(map.values());
         saveLocalReminders(currentReminders);
         scheduleReminderTimers(currentReminders);
@@ -1409,8 +1434,24 @@ function testPlayReminder(id) {
   }
 }
 
-async function deleteReminder(id) {
-  if (!confirm('Delete this reminder?')) return;
+function deleteActiveViewingReminder() {
+  if (activeViewingReminder && activeViewingReminder.id) {
+    const id = activeViewingReminder.id;
+    closeAestheticModal();
+    deleteReminder(id, true);
+  }
+}
+
+async function deleteReminder(id, skipConfirm = false) {
+  if (!id) return;
+  if (!skipConfirm && typeof window.confirm === 'function') {
+    try {
+      if (!confirm('Delete this reminder?')) return;
+    } catch (e) {}
+  }
+
+  markReminderDeleted(id);
+
   // Remove locally immediately
   const localList = getLocalReminders().filter(r => r.id !== id);
   saveLocalReminders(localList);
@@ -1421,13 +1462,55 @@ async function deleteReminder(id) {
   }
   handledReminderIds.delete(id);
   renderReminders();
-  showToast('✓ Reminder deleted');
+  showToast('🗑️ Reminder deleted');
 
   if (authToken) {
     fetch(`/api/reminders/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` }
     }).catch(() => {});
+  }
+}
+
+async function clearAllReminders() {
+  if (!currentReminders || currentReminders.length === 0) {
+    const localList = getLocalReminders();
+    if (localList.length === 0) {
+      showToast('No reminders to clear');
+      return;
+    }
+  }
+
+  try {
+    if (typeof window.confirm === 'function') {
+      if (!confirm('Clear all test reminders and saved messages?')) return;
+    }
+  } catch (e) {}
+
+  const allReminders = [...currentReminders, ...getLocalReminders()];
+  const idsToDelete = Array.from(new Set(allReminders.map(r => r.id).filter(Boolean)));
+
+  idsToDelete.forEach(id => {
+    markReminderDeleted(id);
+    if (activeTimers.has(id)) {
+      clearTimeout(activeTimers.get(id));
+      activeTimers.delete(id);
+    }
+    handledReminderIds.delete(id);
+  });
+
+  currentReminders = [];
+  saveLocalReminders([]);
+  renderReminders();
+  showToast('🧹 All reminders & test data cleared!');
+
+  if (authToken) {
+    idsToDelete.forEach(id => {
+      fetch(`/api/reminders/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authToken}` }
+      }).catch(() => {});
+    });
   }
 }
 
@@ -1576,8 +1659,11 @@ async function checkSession() {
     if (res.status === 401) {
       localStorage.removeItem('reminder_me_token');
       localStorage.removeItem('reminder_me_cached_user');
+      localStorage.removeItem('reminder_me_local_reminders');
+      localStorage.removeItem('reminder_me_deleted_ids');
       authToken = null;
       currentUser = null;
+      currentReminders = [];
       switchNav('auth');
       return;
     }
@@ -1755,8 +1841,11 @@ async function deleteUserAccount() {
     if (res.ok) {
       localStorage.removeItem('reminder_me_token');
       localStorage.removeItem('reminder_me_cached_user');
+      localStorage.removeItem('reminder_me_local_reminders');
+      localStorage.removeItem('reminder_me_deleted_ids');
       authToken = null;
       currentUser = null;
+      currentReminders = [];
       alert('Your account and personal data have been completely deleted.');
       location.reload();
     }
