@@ -1442,13 +1442,8 @@ function deleteActiveViewingReminder() {
   }
 }
 
-async function deleteReminder(id, skipConfirm = false) {
+async function deleteReminder(id, skipConfirm = true) {
   if (!id) return;
-  if (!skipConfirm && typeof window.confirm === 'function') {
-    try {
-      if (!confirm('Delete this reminder?')) return;
-    } catch (e) {}
-  }
 
   markReminderDeleted(id);
 
@@ -1473,21 +1468,7 @@ async function deleteReminder(id, skipConfirm = false) {
 }
 
 async function clearAllReminders() {
-  if (!currentReminders || currentReminders.length === 0) {
-    const localList = getLocalReminders();
-    if (localList.length === 0) {
-      showToast('No reminders to clear');
-      return;
-    }
-  }
-
-  try {
-    if (typeof window.confirm === 'function') {
-      if (!confirm('Clear all test reminders and saved messages?')) return;
-    }
-  } catch (e) {}
-
-  const allReminders = [...currentReminders, ...getLocalReminders()];
+  const allReminders = [...(currentReminders || []), ...getLocalReminders()];
   const idsToDelete = Array.from(new Set(allReminders.map(r => r.id).filter(Boolean)));
 
   idsToDelete.forEach(id => {
@@ -1500,7 +1481,11 @@ async function clearAllReminders() {
   });
 
   currentReminders = [];
-  saveLocalReminders([]);
+  try {
+    localStorage.removeItem('reminder_me_local_reminders');
+    saveLocalReminders([]);
+  } catch (e) {}
+
   renderReminders();
   showToast('🧹 All reminders & test data cleared!');
 
