@@ -819,6 +819,15 @@ function switchNav(targetView) {
 // -------------------------------------------------------------
 // LOCAL OFFLINE-FIRST REMINDER STORAGE & SYNC
 // -------------------------------------------------------------
+// One-time automatic purge of old test data from client browser
+try {
+  if (!localStorage.getItem('reminder_me_test_data_purged_v1')) {
+    localStorage.removeItem('reminder_me_local_reminders');
+    localStorage.removeItem('reminder_me_deleted_ids');
+    localStorage.setItem('reminder_me_test_data_purged_v1', 'true');
+  }
+} catch (e) {}
+
 function getLocalReminders() {
   try {
     const raw = localStorage.getItem('reminder_me_local_reminders');

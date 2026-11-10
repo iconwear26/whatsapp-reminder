@@ -1,5 +1,5 @@
 // Service Worker for Reminder Me App (PWA)
-const CACHE_NAME = 'reminderme-pwa-v16';
+const CACHE_NAME = 'reminderme-pwa-v17';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
